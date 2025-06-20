@@ -1,6 +1,6 @@
 module ChiDB
 using Toolips
-import Toolips: on_start
+import Toolips: on_start, MultiHandler, route!
 using AlgebraFrames
 using AlgebraStreamFrames
 using Nettle
@@ -20,7 +20,7 @@ struct Transaction
     username::String
 end
 
-mutable struct DeeBee <: Toolips.AbstractExtension
+mutable struct DeeBee <: Toolips.SocketServerExtension
     dir::String
     tables::Dict{String, StreamFrame}
     # (transaction ID, status)
@@ -35,7 +35,10 @@ mutable struct DeeBee <: Toolips.AbstractExtension
     enc::Encryptor
     dec::Decryptor
     function DeeBee(dir::String)
-        command_available = Dict{UInt16, UInt8}()
+        new(dir, Dict{String, StreamFrame}(), Dict{UInt16, UInt8}(), 
+    Dict{String, UInt16}(), Vector{Transaction}(), Dict{UInt16, UInt16}(), 
+    Vector{DBUser}(), Encryptor("AES256", Toolips.gen_ref(32)), 
+    Decryptor("AES256", Toolips.gen_ref(32)))
     end
 end
 
@@ -76,15 +79,17 @@ function dump_transactions!(db::DeeBee)
 
 end
 
-function setup_dbdir(db::DeeBee; dir::Bool = false)
+function setup_dbdir(db::DeeBee, dir::Bool = false)
+    dbdir = db.dir * "/db"
     if dir
-        mkdir(db.dir * "/db")
+        mkdir(dbdir)
     end
-    touch(db.dir * "/secrets.txt")
-    users_dir = db.dir * "/users.txt"
+    secrets_dir = dbdir * "/secrets.txt"
+    touch(secrets_dir)
+    users_dir = dbdir * "/users.txt"
     touch(users_dir)
-    touch(db.dir * "/history.txt")
-    keydir = db.dir * "/key.pem"
+    touch(dbdir * "/history.txt")
+    keydir = dbdir * "/key.pem"
     touch(keydir)
     hmac = Toolips.gen_ref(32)
     admin_ref = Toolips.gen_ref(16)
@@ -92,10 +97,10 @@ function setup_dbdir(db::DeeBee; dir::Bool = false)
         write(o, hmac)
     end
     db.enc = Encryptor("AES256", hmac)
-    open(users_dir) do o::IOStream
+    open(users_dir, "w") do o::IOStream
         write(o, "admin")
     end
-    open(secrets_dir) do o::IOStream
+    open(secrets_dir, "w") do o::IOStream
         write(o, encrypt(db.enc, admin_ref))
     end
     @info "ChiDB server started for the first time at $(db.dir)"
@@ -106,10 +111,11 @@ end
 function load_db!(db::DeeBee)
     if ~(isdir(db.dir * "/db"))
         setup_dbdir(db, true)
-    elseif ~(isfile(db.dir * "/secrets.txt"))
+        @info "not dir"
+    elseif ~(isfile(db.dir * "/db/key.pem"))
         setup_dbdir(db)
     end
-    hmac = read(db.dir * "/secrets.txt", String)
+    hmac = read(db.dir * "/db/key.pem", String)
     db.enc = Encryptor("AES256", hmac)
     db.dec = Decryptor("AES256", hmac)
 end
@@ -145,8 +151,13 @@ verify = handler() do c::Toolips.SocketConnection
     if ~(cmd == 'S')
         return
     end
-    operands = query[3:end]
-    write!(c, "")
+    operands = split(query[3:end], " ")
+    set_handler!(c, "query")
+    write!(c, "$opcode $trans_id")
+end
+
+accept_query = handler("query") do 
+
 end
 
 #==
@@ -156,11 +167,12 @@ OPTRANSB|S|username db_key password
 
 
 multi_handler = MultiHandler(verify, ip4 = false)
+DB_EXTENSION = DeeBee("")
 
-function start(path::String, ip::IP4 = "127.0.0.1":8000)
+function start(path::String, ip::IP4 = "127.0.0.1":8005)
     DB_EXTENSION.dir = path
-    start!(ChiDB, ip)
+    start!(:TCP, ChiDB, ip, async = true)
 end
 
-export multi_handler
+export multi_handler, DB_EXTENSION
 end # module ChiDB
