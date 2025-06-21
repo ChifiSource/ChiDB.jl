@@ -1,20 +1,27 @@
 module ChiDB
 using Toolips
-import Toolips: on_start, MultiHandler, route!
+import Toolips: on_start, MultiHandler, route!, set_handler!, get_ip4
 using AlgebraFrames
 using AlgebraStreamFrames
 using Nettle
 
+make_transaction_id() = begin
+    sampler = ("0", "1")
+    join(sampler[rand(1:2)] for val in 1:4)
+end
+
 struct DBCommand{T} end
 
-struct DBUser
+mutable struct DBUser
     username::String
     pwd::String
-    access_key::String
+    key::String
+    transaction_id::String
     table::String
 end
 
 struct Transaction
+    id::String
     cmd::Char
     operands::Vector{Any}
     username::String
@@ -23,22 +30,18 @@ end
 mutable struct DeeBee <: Toolips.SocketServerExtension
     dir::String
     tables::Dict{String, StreamFrame}
-    # (transaction ID, status)
-    command_available::Dict{UInt16, UInt8}
     # IP, transactionID
-    transaction_ids::Dict{String, UInt16}
+    transaction_ids::Dict{IP4, String}
     # Stored transaction history (occassionally dumped)
     transactions::Vector{Transaction}
-    # (opcode, transactionid)
-    opcode::Dict{UInt16, UInt16}
     cursors::Vector{DBUser}
     enc::Encryptor
     dec::Decryptor
     function DeeBee(dir::String)
-        new(dir, Dict{String, StreamFrame}(), Dict{UInt16, UInt8}(), 
-    Dict{String, UInt16}(), Vector{Transaction}(), Dict{UInt16, UInt16}(), 
-    Vector{DBUser}(), Encryptor("AES256", Toolips.gen_ref(32)), 
-    Decryptor("AES256", Toolips.gen_ref(32)))
+        new(dir, Dict{String, StreamFrame}(), 
+            Dict{IP4, String}(), Vector{Transaction}(), 
+            Vector{DBUser}(), Encryptor("AES256", Toolips.gen_ref(32)), 
+            Decryptor("AES256", Toolips.gen_ref(32)))
     end
 end
 
@@ -93,31 +96,41 @@ function setup_dbdir(db::DeeBee, dir::Bool = false)
     touch(keydir)
     hmac = Toolips.gen_ref(32)
     admin_ref = Toolips.gen_ref(16)
+    admin_keyenc =Toolips.gen_ref(32)
+    db.enc = Encryptor("AES256", hmac)
     open(keydir, "w") do o::IOStream
         write(o, hmac)
     end
-    db.enc = Encryptor("AES256", hmac)
     open(users_dir, "w") do o::IOStream
         write(o, "admin")
     end
     open(secrets_dir, "w") do o::IOStream
-        write(o, encrypt(db.enc, admin_ref))
+        write(o, String(encrypt(db.enc, admin_ref)) * "DIV" * admin_keyenc * "!EOF")
     end
     @info "ChiDB server started for the first time at $(db.dir)"
-    @info "admin login: admin $admin_ref"
+    @info "admin login: ($admin_keyenc) admin $admin_ref"
     @info "pem: $hmac"
 end
 
 function load_db!(db::DeeBee)
     if ~(isdir(db.dir * "/db"))
         setup_dbdir(db, true)
-        @info "not dir"
     elseif ~(isfile(db.dir * "/db/key.pem"))
         setup_dbdir(db)
     end
     hmac = read(db.dir * "/db/key.pem", String)
+    usernames = readlines(db.dir * "/db/users.txt")
+    wds = split(read(db.dir * "/db/secrets.txt", String), "!EOF")
+    for usere in 1:length(usernames)
+        pwd_key = split(wds[usere], "DIV")
+        push!(db.cursors, DBUser(usernames[usere], 
+            string(pwd_key[1]), 
+            string(replace(pwd_key[2], "\n" => "", "!EOF" => "")), "", ""))
+        @info "loaded dbuser $(usernames[usere])"
+    end
     db.enc = Encryptor("AES256", hmac)
     db.dec = Decryptor("AES256", hmac)
+    @info String(decrypt(db.dec, Vector{UInt8}(db.cursors[1].pwd)))
 end
 
 function on_start(data::Dict{Symbol, Any}, db::DeeBee)
@@ -136,43 +149,86 @@ function parse_db_header(header::String)
         throw("Invalid DB header: length does not equal two.")
     end
     optrans = bitstring(UInt32(header[1]))
-    opcode = parse(UInt16, optrans[1:4])
-    transaction_id = parse(UInt16, optrans[5:8])
+    opcode = optrans[1:4]
+    transaction_id = optrans[5:8]
     return(opcode, transaction_id, header[2])
 end
 
 verify = handler() do c::Toolips.SocketConnection
-    query::String = read_all(c)
-    n = length(query)
-    if ~(n > 3)
-        return
+    query = ""
+    selected_user = nothing
+    while true
+        query::String = query * String(readavailable(c))
+        
+        n = length(query)
+        if ~(query[end] == '\n')
+            yield()
+            continue
+        else
+            @info "completed query"
+        end
+        opcode::String, trans_id::String, cmd::Char = parse_db_header(query[1:2])
+        if ~(cmd == 'S')
+            @info "returned bad cmd"
+            return
+        end
+        operands = split(query[3:end], " ")
+        db_key = operands[1]
+        user = operands[2]
+        pwd = string(operands[3])
+        @warn "provided user: $user"
+        @warn "provided pwd: $pwd"
+        @warn length(pwd)
+        @warn "provided dbkey: $db_key"
+        cursors = c[:DB].cursors
+        usere = findfirst(u -> u.username == user, cursors)
+        if isnothing(usere)
+            @info "returned bad user"
+            return
+        end
+        selected_user = cursors[usere]
+        if ~(pwd[1:end - 1] == String(decrypt(c[:DB].dec, selected_user.pwd)))
+            @warn "password fail"
+            return
+        end
+        if db_key != selected_user.key
+            @info "returned bad db key"
+            return
+        end
+        trans_id = make_transaction_id()
+        selected_user.transaction_id = trans_id
+        push!(c[:DB].transaction_ids, get_ip4(c) => trans_id)
+        push!(c[:DB].transactions, Transaction(trans_id, 'S', [db_key, user], 
+        selected_user.username))
+        header_b = Char(parse(UInt8, "0001" * trans_id, base = 2))
+        write!(c, "$header_b")
+        @info "verified client $(selected_user.username)"
+        break
     end
-    opcode::UInt16, trans_id::UInt16, cmd::Char = parse_db_header(query[1:2])
-    if ~(cmd == 'S')
-        return
+    query = ""
+    while true
+        query = query * String(readavailable(c))
+        if ~(query[end] == '\n')
+            yield()
+            continue
+        else
+            @info "completed query"
+        end
+        opcode::String, trans_id::String, cmd::Char = parse_db_header(query[1:2])
     end
-    operands = split(query[3:end], " ")
-    set_handler!(c, "query")
-    write!(c, "$opcode $trans_id")
-end
-
-accept_query = handler("query") do 
-
 end
 
 #==
-example set header
+example set header (| is bit-defined data-separation for header)
 OPTRANSB|S|username db_key password
 ==#
 
-
-multi_handler = MultiHandler(verify, ip4 = false)
 DB_EXTENSION = DeeBee("")
 
 function start(path::String, ip::IP4 = "127.0.0.1":8005)
     DB_EXTENSION.dir = path
-    start!(:TCP, ChiDB, ip, async = true)
+    start!(:TCP, ChiDB, ip, async = false)
 end
 
-export multi_handler, DB_EXTENSION
+export DB_EXTENSION, verify
 end # module ChiDB
