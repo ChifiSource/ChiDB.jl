@@ -1,10 +1,49 @@
 module ChiDB
 using Toolips
-import Toolips: on_start, MultiHandler, route!, set_handler!, get_ip4
+import Toolips: on_start, MultiHandler, route!, set_handler!, get_ip4, string
 using AlgebraFrames
 using AlgebraStreamFrames
 using Nettle
+#==
+COMMAND TABLE:
+# server
+S - login
+U - list users
+C - create user
+K - set password
 
+# query
+s - select
+j - join
+c - column
+v - value
+l - list
+g - get observation index
+d - delete at
+t - create table
+z - delete table
+m - view table
+x - get columns
+t - set type
+==#
+#==
+OPCODE
+------
+OK            | error
+----------------------------
+query accept  | bad packet
+0001          | 1000
+user created  | login denied (connection closed)
+0011          | 1100
+password set  | bad dbkey (connection closed)
+0101          | 1010
+              | command error
+              | 1110
+              | argument error
+              | 1010
+              | bad transaction (connection closed)
+              | 1111
+==#
 make_transaction_id() = begin
     sampler = ("0", "1")
     join(sampler[rand(1:2)] for val in 1:4)
@@ -26,6 +65,8 @@ struct Transaction
     operands::Vector{Any}
     username::String
 end
+
+string(ts::Transaction) = "$(ts.id)|$(ts.username): $(ts.cmd) ; $(operands)\n"
 
 mutable struct DeeBee <: Toolips.SocketServerExtension
     dir::String
@@ -79,7 +120,11 @@ load_schema!(db::DeeBee) = begin
 end
 
 function dump_transactions!(db::DeeBee)
-
+    open(db.dir * "/db/history.txt", "a") do o::IOStream
+        for tsact in db.transactions
+            write(o, string(tsact))
+        end
+    end
 end
 
 function setup_dbdir(db::DeeBee, dir::Bool = false)
@@ -183,21 +228,23 @@ verify = handler() do c::Toolips.SocketConnection
         cursors = c[:DB].cursors
         usere = findfirst(u -> u.username == user, cursors)
         if isnothing(usere)
-            @info "returned bad user"
+            header = "1100" * make_transaction_id()
+            write!(c, "$(Char(parse(UInt8, header, base = 2)))")
             return
         end
         selected_user = cursors[usere]
         if ~(pwd[1:end - 1] == String(decrypt(c[:DB].dec, selected_user.pwd)))
-            @warn "password fail"
+            header = "1100" * make_transaction_id()
+            write!(c, "$(Char(parse(UInt8, header, base = 2)))")
             return
         end
         if db_key != selected_user.key
-            @info "returned bad db key"
+            header = "1010" * make_transaction_id()
+            write!(c, "$(Char(parse(UInt8, header, base = 2)))")
             return
         end
         trans_id = make_transaction_id()
         selected_user.transaction_id = trans_id
-        push!(c[:DB].transaction_ids, get_ip4(c) => trans_id)
         push!(c[:DB].transactions, Transaction(trans_id, 'S', [db_key, user], 
         selected_user.username))
         header_b = Char(parse(UInt8, "0001" * trans_id, base = 2))
@@ -215,7 +262,50 @@ verify = handler() do c::Toolips.SocketConnection
             @info "completed query"
         end
         opcode::String, trans_id::String, cmd::Char = parse_db_header(query[1:2])
+        if trans_id != selected_user.transaction_id
+            header = "1111" * make_transaction_id()
+            write!(c, "$(Char(parse(UInt8, header, base = 2)))")
+            return
+        end
+        command = DBCommand{Symbol(cmd)}
+        args = Vector{SubString{String}}()
+        if length(query) > 2
+            args = split(query[3:end], "|!|")
+        end
+        success = perform_command!(c, command, args ...)
+        trans_id = make_transaction_id()
+        selected_user.transaction_id = trans_id
+        header = ""
+        if success == 0
+            header = "0001" * trans_id
+            push!(c[:DB].transactions, Transaction(trans_id, cmd, args, 
+            selected_user.username))
+        elseif success == 1
+            # (command error)
+            header = "1110" * trans_id
+        elseif success == 2
+            # argument error
+            header = "1110" * trans_id
+        end
+        write!(c, "$(Char(parse(UInt8, header, base = 2)))")
+        if length(c[:DB].transactions) > 50
+            dump_transactions!(db::DeeBee)
+        end
+        yield()
+        continue
     end
+end
+
+function perform_command!(c::SocketConnection, cmd::Type{DBCommand{<:Any}}, args::String ...)
+
+end
+
+function perform_command!(c::SocketConnection, cmd::Type{DBCommand{:s}}, args::String ...)
+    
+end
+
+function perform_command!(c::SocketConnection, cmd::DBCommand{:c}, args::String ...)
+    
 end
 
 #==
