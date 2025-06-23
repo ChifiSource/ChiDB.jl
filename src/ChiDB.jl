@@ -1,8 +1,9 @@
 module ChiDB
 using Toolips
 import Toolips: on_start, MultiHandler, route!, set_handler!, get_ip4, string
-using AlgebraFrames
+import Base: parse
 using AlgebraStreamFrames
+import AlgebraStreamFrames: get_datatype
 using Nettle
 #==
 COMMAND TABLE:
@@ -15,6 +16,7 @@ K - set password
 # query
 s - select
 j - join
+b - reference join
 c - get column
 v - value
 l - list tables
@@ -26,7 +28,9 @@ m - view table
 x - list columns
 n - set type
 p - compare
+i - in
 a - store
+r - rename
 ==#
 #==
 OPCODE
@@ -69,6 +73,18 @@ struct Transaction
 end
 
 string(ts::Transaction) = "$(ts.id)|$(ts.username): $(ts.cmd) ; $(operands)\n"
+
+mutable struct Crypt
+    values::String
+end
+
+string(c::Crypt) = begin 
+    String(decrypt(ChiDB.DB_EXTENSION.dec, Vector{UInt8}(db.cursors[1].pwd)))::String
+end
+
+get_datatype(std::Type{StreamDataType{:Crypt}}) = Crypt
+
+parse(T::Type{Crypt}, raw::String) = Crypt(raw)::Crypt
 
 mutable struct DeeBee <: Toolips.SocketServerExtension
     dir::String
@@ -323,31 +339,57 @@ DB_EXTENSION = DeeBee("")
 function perform_command!(user::DBUser, cmd::Type{DBCommand{<:Any}}, args::AbstractString ...)
     return(1, "")
 end
-
+# list tables
 function perform_command!(user::DBUser, cmd::Type{DBCommand{:l}}, args::AbstractString ...)
     list = keys(DB_EXTENSION.tables)
     return(0, 
         join(
     "$k ($(length(DB_EXTENSION.tables[k].names)) columns)\n" for k in keys(DB_EXTENSION.tables)))
 end
-
+# list columns
+function perform_command!(user::DBUser, cmd::Type{DBCommand{:x}}, args::AbstractString ...)
+    return(0, "")
+end
+# select table
 function perform_command!(user::DBUser, cmd::Type{DBCommand{:s}}, args::AbstractString ...)
     user.table = args[1]
     return(0, "")
 end
-
+# create table
 function perform_command!(user::DBUser, cmd::Type{DBCommand{:t}}, args::AbstractString ...)
+    if length(args) > 0
+        return(2, "create table requires name")
+    end
     newname = args[1]
     if newname in keys(DB_EXTENSION.tables)
         return(2, "table $newname exists")
     end
-    new_table = StreamFrame()
+    new_table = StreamFrame{:ff}()
     push!(DB_EXTENSION.tables, newname => args[2])
+    mkdir(DB_EXTENSION.dir * "/$newname")
     return(0, "")
 end
-
+# get column
 function perform_command!(user::DBUser, cmd::DBCommand{:c}, args::AbstractString ...)
-
+    if length(args) < 1
+        return(2, "create column requires a column directory")
+    end
+    args = args[1]
+    table_selected = ""
+    col_selected = ""
+    if ~(contains(args, "/"))
+        if user.table == ""
+            return(2, "proper table path not selected")
+        end
+        table_selected = user.table
+        col_selected = args
+    else
+        splts = split(args[1])
+        table_selected = splts[1]
+        col_selected = splts[2]
+    end
+    generated = DB_EXTENSION.tables[string(table_selected)][string(col_selected)]
+    return(0, join((string(gen) for gen in generated), ";"))
 end
 
 #==
