@@ -15,16 +15,18 @@ K - set password
 # query
 s - select
 j - join
-c - column
+c - get column
 v - value
-l - list
+l - list tables
 g - get observation index
 d - delete at
 t - create table
 z - delete table
 m - view table
-x - get columns
-t - set type
+x - list columns
+n - set type
+p - compare
+a - store
 ==#
 #==
 OPCODE
@@ -115,7 +117,7 @@ load_schema!(db::DeeBee) = begin
                 db.tables[framename][colname][e]
             end
         end
-        push!(db, path => this_frame)
+        push!(db.tables, path => this_frame)
     end
 end
 
@@ -193,7 +195,8 @@ function parse_db_header(header::String)
     if ~(length(header) == 2)
         throw("Invalid DB header: length does not equal two.")
     end
-    optrans = bitstring(UInt32(header[1]))
+    optrans = bitstring(UInt8(header[1]))
+    @warn "OPTRANS: $optrans"
     opcode = optrans[1:4]
     transaction_id = optrans[5:8]
     return(opcode, transaction_id, header[2])
@@ -204,7 +207,6 @@ verify = handler() do c::Toolips.SocketConnection
     selected_user = nothing
     while true
         query::String = query * String(readavailable(c))
-        
         n = length(query)
         if ~(query[end] == '\n')
             yield()
@@ -234,6 +236,8 @@ verify = handler() do c::Toolips.SocketConnection
         end
         selected_user = cursors[usere]
         if ~(pwd[1:end - 1] == String(decrypt(c[:DB].dec, selected_user.pwd)))
+            @info pwd[1:end - 1]
+            @warn String(decrypt(c[:DB].dec, selected_user.pwd))
             header = "1100" * make_transaction_id()
             write!(c, "$(Char(parse(UInt8, header, base = 2)))")
             return
@@ -245,6 +249,7 @@ verify = handler() do c::Toolips.SocketConnection
         end
         trans_id = make_transaction_id()
         selected_user.transaction_id = trans_id
+        @warn "set trans id: $trans_id"
         push!(c[:DB].transactions, Transaction(trans_id, 'S', [db_key, user], 
         selected_user.username))
         header_b = Char(parse(UInt8, "0001" * trans_id, base = 2))
@@ -254,15 +259,28 @@ verify = handler() do c::Toolips.SocketConnection
     end
     query = ""
     while true
-        query = query * String(readavailable(c))
+        current_quer = String(readavailable(c))
+        if current_quer == "\n"
+            continue
+        end
+        query = query * current_quer
         if ~(query[end] == '\n')
             yield()
             continue
         else
             @info "completed query"
+            @warn query
+        end
+        query = replace(query, "\n" => "")
+        if query == "clear"
+            query = ""
+            continue
         end
         opcode::String, trans_id::String, cmd::Char = parse_db_header(query[1:2])
         if trans_id != selected_user.transaction_id
+            @warn "transid bad"
+            @info trans_id
+            @info selected_user.transaction_id
             header = "1111" * make_transaction_id()
             write!(c, "$(Char(parse(UInt8, header, base = 2)))")
             return
@@ -272,10 +290,14 @@ verify = handler() do c::Toolips.SocketConnection
         if length(query) > 2
             args = split(query[3:end], "|!|")
         end
-        success = perform_command!(c, command, args ...)
+        success, output = perform_command!(selected_user, command, args ...)
         trans_id = make_transaction_id()
         selected_user.transaction_id = trans_id
         header = ""
+        @warn command
+        @warn success
+        @info output
+        output = "\n" * output
         if success == 0
             header = "0001" * trans_id
             push!(c[:DB].transactions, Transaction(trans_id, cmd, args, 
@@ -287,7 +309,7 @@ verify = handler() do c::Toolips.SocketConnection
             # argument error
             header = "1110" * trans_id
         end
-        write!(c, "$(Char(parse(UInt8, header, base = 2)))")
+        write!(c, "$(Char(parse(UInt8, header, base = 2)))" * output)
         if length(c[:DB].transactions) > 50
             dump_transactions!(db::DeeBee)
         end
@@ -296,16 +318,36 @@ verify = handler() do c::Toolips.SocketConnection
     end
 end
 
-function perform_command!(c::SocketConnection, cmd::Type{DBCommand{<:Any}}, args::String ...)
+DB_EXTENSION = DeeBee("")
 
+function perform_command!(user::DBUser, cmd::Type{DBCommand{<:Any}}, args::AbstractString ...)
+    return(1, "")
 end
 
-function perform_command!(c::SocketConnection, cmd::Type{DBCommand{:s}}, args::String ...)
-    
+function perform_command!(user::DBUser, cmd::Type{DBCommand{:l}}, args::AbstractString ...)
+    list = keys(DB_EXTENSION.tables)
+    return(0, 
+        join(
+    "$k ($(length(DB_EXTENSION.tables[k].names)) columns)\n" for k in keys(DB_EXTENSION.tables)))
 end
 
-function perform_command!(c::SocketConnection, cmd::DBCommand{:c}, args::String ...)
-    
+function perform_command!(user::DBUser, cmd::Type{DBCommand{:s}}, args::AbstractString ...)
+    user.table = args[1]
+    return(0, "")
+end
+
+function perform_command!(user::DBUser, cmd::Type{DBCommand{:t}}, args::AbstractString ...)
+    newname = args[1]
+    if newname in keys(DB_EXTENSION.tables)
+        return(2, "table $newname exists")
+    end
+    new_table = StreamFrame()
+    push!(DB_EXTENSION.tables, newname => args[2])
+    return(0, "")
+end
+
+function perform_command!(user::DBUser, cmd::DBCommand{:c}, args::AbstractString ...)
+
 end
 
 #==
@@ -313,7 +355,6 @@ example set header (| is bit-defined data-separation for header)
 OPTRANSB|S|username db_key password
 ==#
 
-DB_EXTENSION = DeeBee("")
 
 function start(path::String, ip::IP4 = "127.0.0.1":8005)
     DB_EXTENSION.dir = path
