@@ -4,8 +4,42 @@
 
 ###### a toolips-based data-base server
 `ChiDB` is a unique data-base server designed around the `AlgebraFrames` concept and the `.ff` file format. Schema is laid using directories and filenames and data is live-read into memory. This is currently in a state of relative infancy, but is primarily being developed for my own use cases and to demonstrate the various server-building capabilities of `Toolips`.
-#### setup
-#### querying and headers
+## setup
+In order to use `ChiDB`, we first need [julia](https://julialang.org). With Julia installed, the package may be added with `Pkg`:
+```julia
+using Pkg; Pkg.add(url = "https://github.com/ChifiSource/ChiDB.jl")
+using ChiDB
+```
+To setup a `ChiDB` server directory, run `ChiDB.start` and provide an **empty** directory as `path`. This will create a new folder called `db`, which will contain the data-bases core information.
+```julia
+start(path::String, ip::IP4 = "127.0.0.1":8005)
+```
+Our `admin` login will also be printed here; by querying with this new `admin` login we may create new users.
+#### loading schema
+Once we have a data-base server and its directory, we are going to need to create schema. There are two ways to create your schema:
+- *querying*
+- or by simply creating a filesystem.
+
+`ChiDB`'s internal data is primarily stored in the `.ff` (*feature file*) format. There are no sub-tables, only reference columns. Both references and `.ff` feature files are represented by files, and the tables they reside in are represented by directories. In order to create schema, we would simply add new folders with new `.ff` files for each column to our new data-base directory. Consider the following sample directory structure:
+- project directory
+  - /db
+  - /table1
+    - /col1.ff
+    - /col2.ff
+    - /table2_col1.ref
+  - /table2
+    - /col1.ff
+
+Each `.ff` file's first line will be a readable data-type. For example, `col1.ff` from above could be
+```ff
+Integer
+```
+## readable data-types
+## usage
+
+#### querying
+
+#### headers
 You will likely want an *API* of some sort to query a `ChiDB` servers. Every query, including your initial query, will be sent with a two-byte header. This header includes three fields: the `opcode` (4 bits), the `transaction id` (4 bits) (composing the first byte) and the second byte (8 bits) is dedicated to the *command character* -- a single-character reference that requests a query command.
 - The `opcode` returns a success code dependent on the status of the last query. See [opcodes](#opcodes) for a full list of opcodes.
 - The `transaction id` will be the ID of the transaction that is just issued. This needs to be sent **back** to the server on each query, and will need to be wrapped into each header we send to the server.
