@@ -3,7 +3,7 @@ using Toolips
 import Toolips: on_start, MultiHandler, route!, set_handler!, get_ip4, string
 import Base: parse
 using AlgebraStreamFrames
-import AlgebraStreamFrames: get_datatype
+import AlgebraStreamFrames: get_datatype, StreamDataType
 using Nettle
 #==
 COMMAND TABLE:
@@ -18,6 +18,7 @@ s - select
 j - join
 b - reference join
 c - get column
+w - get row
 v - value
 l - list tables
 g - get observation index
@@ -246,7 +247,7 @@ verify = handler() do c::Toolips.SocketConnection
         cursors = c[:DB].cursors
         usere = findfirst(u -> u.username == user, cursors)
         if isnothing(usere)
-            header = "1100" * make_transaction_id()
+            header = "1100" * make_transaction_id() * "\n"
             write!(c, "$(Char(parse(UInt8, header, base = 2)))")
             return
         end
@@ -254,12 +255,12 @@ verify = handler() do c::Toolips.SocketConnection
         if ~(pwd[1:end - 1] == String(decrypt(c[:DB].dec, selected_user.pwd)))
             @info pwd[1:end - 1]
             @warn String(decrypt(c[:DB].dec, selected_user.pwd))
-            header = "1100" * make_transaction_id()
+            header = "1100" * make_transaction_id() * "\n"
             write!(c, "$(Char(parse(UInt8, header, base = 2)))")
             return
         end
         if db_key != selected_user.key
-            header = "1010" * make_transaction_id()
+            header = "1010" * make_transaction_id() * "\n"
             write!(c, "$(Char(parse(UInt8, header, base = 2)))")
             return
         end
@@ -269,7 +270,7 @@ verify = handler() do c::Toolips.SocketConnection
         push!(c[:DB].transactions, Transaction(trans_id, 'S', [db_key, user], 
         selected_user.username))
         header_b = Char(parse(UInt8, "0001" * trans_id, base = 2))
-        write!(c, "$header_b")
+        write!(c, "$header_b" * "\n")
         @info "verified client $(selected_user.username)"
         break
     end
@@ -280,7 +281,7 @@ verify = handler() do c::Toolips.SocketConnection
             continue
         end
         query = query * current_quer
-        if ~(query[end] == '\n')
+        if ~(length(query) > 0 && query[end] == '\n')
             yield()
             continue
         else
@@ -325,7 +326,7 @@ verify = handler() do c::Toolips.SocketConnection
             # argument error
             header = "1110" * trans_id
         end
-        write!(c, "$(Char(parse(UInt8, header, base = 2)))" * output)
+        write!(c, "$(Char(parse(UInt8, header, base = 2)))" * output * "\n")
         if length(c[:DB].transactions) > 50
             dump_transactions!(db::DeeBee)
         end
