@@ -29,7 +29,9 @@ make_transaction_id() = begin
     join(sampler[rand(1:2)] for val in 1:4)
 end
 
-struct DBCommand{T} end
+abstract type AbstractDBCommand end
+
+struct DBCommand{T} <: AbstractDBCommand end
 
 mutable struct DBUser
     username::String
@@ -256,6 +258,10 @@ verify = handler() do c::Toolips.SocketConnection
     end
     query = ""
     while true
+        if eof(c.stream)
+            query = ""
+            break
+        end
         current_quer = String(readavailable(c))
         if current_quer == "\n"
             continue
@@ -273,7 +279,12 @@ verify = handler() do c::Toolips.SocketConnection
             query = ""
             continue
         end
-        opcode::String, trans_id::String, cmd::Char = parse_db_header(query[1:2])
+        opcode, trans_id, cmd = (nothing, nothing, nothing)
+        try
+            opcode, trans_id, cmd = parse_db_header(query[1:2])
+        catch
+            header = "1000" * make_transaction_id() * "\n"
+        end
         if trans_id != selected_user.transaction_id
             @warn "transid bad"
             @info trans_id
@@ -304,9 +315,9 @@ verify = handler() do c::Toolips.SocketConnection
             header = "1110" * trans_id
         elseif success == 2
             # argument error
-            header = "1110" * trans_id
+            header = "1010" * trans_id
         end
-        write!(c, "$(Char(parse(UInt8, header, base = 2)))" * output * "\n")
+        write!(c, "$(Char(parse(UInt8, header, base = 2)))%" * output * "\n")
         if length(c[:DB].transactions) > 50
             dump_transactions!(db::DeeBee)
         end
@@ -318,15 +329,20 @@ end
 
 DB_EXTENSION = DeeBee("")
 
-function perform_command!(user::DBUser, cmd::Type{DBCommand{<:Any}}, args::AbstractString ...)
+function perform_command!(user::DBUser, cmd::Type{<:AbstractDBCommand}, args::AbstractString ...)
     return(1, "command does not exist")
 end
+
+include("commands.jl")
+
 #==
 example set header (| is bit-defined data-separation for header, 
                     do not include this character)
 OPTRANSB|S|username db_key password
 ==#
 function start(path::String, ip::IP4 = "127.0.0.1":8005)
+    @warn "ChiDB is not yet fully functional or ready for production use."
+    @info "this version is primarily being used for testing, at the moment. This project is a work-in-progress."
     DB_EXTENSION.dir = path
     start!(:TCP, ChiDB, ip, async = false)
 end

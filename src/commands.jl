@@ -8,9 +8,9 @@ K - set password
 
 # query
 #  table management
-l - list tables
+l - list
 s - select
-t - create table
+t - create
 m - view table
 
 # get-store
@@ -104,6 +104,7 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:g}}, args::Abstract
     end
     if n > 1
         range_sel = args[2]
+        @info range_sel
         selected_ind = 1
         if range_sel == "where"
             wherelookup = Dict("==" => ==, "<" => <, "<=" => <=, 
@@ -125,14 +126,16 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:g}}, args::Abstract
             end
         else
             selected_ind = try
-                parse(Int64, vals[1]):parse(Int64, vals[2])
+                parse(Int64, range_sel)
             catch
                 return(2, "could not parse index")
             end
         end
-        
+        generated = DB_EXTENSION.tables[string(table_selected)][string(col_selected)]
         return(0, join((string(gen) for gen in generated[selected_ind]), ";"))
     end
+    @warn table_selected
+    @warn col_selected
     generated = DB_EXTENSION.tables[string(table_selected)][string(col_selected)]
     return(0, join((string(gen) for gen in generated), ";"))
 end
