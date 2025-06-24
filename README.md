@@ -65,4 +65,29 @@ end
 write!(sock, resp[1:1] * "l")
 ```
 ###### commands
+- `()` indicates an optional argument.
+<table>
+  <tr>
+    <th>header character</th>
+    <th>name</th>
+    <th>description</th>
+    <th>standard name</th>
+    <th>arguments</th>
+  </tr>
+  <tr>
+    <td align="center">l</td>
+    <td>list</td>
+    <td>lists the columns within a table, and their types, or lists all tables when provided with no argument</td>
+    <td>list</td>
+    <td>(table)</td>
+  </tr>
+    <tr>
+    <td align="center">s</td>
+    <td align="center">select</td>
+    <td>Selects a table.</td>
+    <td align="center">select</td>
+    <td>table</td>
+  </tr>
+</table>
+
 ###### opcodes
