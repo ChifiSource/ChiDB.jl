@@ -117,7 +117,12 @@ load_schema!(db::DeeBee) = begin
         end
         features = []
         references = []
-        for file in readdir(table_path)
+        cols = readdir(table_path)
+        if length(cols) == 0
+            push!(db.tables, path => StreamFrame{:ff}())
+            continue
+        end
+        for file in cols
             if contains(file, ".ff")
                 push!(features, replace(file, ".ff" => "") => table_path * "/$file")
             elseif contains(file, ".ref")
@@ -249,6 +254,7 @@ verify = handler() do c::Toolips.SocketConnection
         if isnothing(usere)
             header = "1100" * make_transaction_id() * "\n"
             write!(c, "$(Char(parse(UInt8, header, base = 2)))")
+            @info "no usere"
             return
         end
         selected_user = cursors[usere]
@@ -260,6 +266,7 @@ verify = handler() do c::Toolips.SocketConnection
             return
         end
         if db_key != selected_user.key
+            @warn "invalid dbkey return"
             header = "1010" * make_transaction_id() * "\n"
             write!(c, "$(Char(parse(UInt8, header, base = 2)))")
             return
@@ -330,6 +337,7 @@ verify = handler() do c::Toolips.SocketConnection
         if length(c[:DB].transactions) > 50
             dump_transactions!(db::DeeBee)
         end
+        query = ""
         yield()
         continue
     end
@@ -349,6 +357,11 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:l}}, args::Abstract
 end
 # list columns
 function perform_command!(user::DBUser, cmd::Type{DBCommand{:x}}, args::AbstractString ...)
+    table = ""
+    column = ""
+    if length(args) < 0
+
+    end
     return(0, "")
 end
 # select table
@@ -358,7 +371,7 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:s}}, args::Abstract
 end
 # create table
 function perform_command!(user::DBUser, cmd::Type{DBCommand{:t}}, args::AbstractString ...)
-    if length(args) > 0
+    if length(args) < 0
         return(2, "create table requires name")
     end
     newname = args[1]
@@ -366,16 +379,15 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:t}}, args::Abstract
         return(2, "table $newname exists")
     end
     new_table = StreamFrame{:ff}()
-    push!(DB_EXTENSION.tables, newname => args[2])
+    push!(DB_EXTENSION.tables, newname => new_table)
     mkdir(DB_EXTENSION.dir * "/$newname")
     return(0, "")
 end
 # get column
-function perform_command!(user::DBUser, cmd::DBCommand{:c}, args::AbstractString ...)
+function perform_command!(user::DBUser, cmd::Type{DBCommand{:c}}, args::AbstractString ...)
     if length(args) < 1
         return(2, "create column requires a column directory")
     end
-    args = args[1]
     table_selected = ""
     col_selected = ""
     if ~(contains(args, "/"))
@@ -385,13 +397,16 @@ function perform_command!(user::DBUser, cmd::DBCommand{:c}, args::AbstractString
         table_selected = user.table
         col_selected = args
     else
-        splts = split(args[1])
+        splts = split(args, "/")
         table_selected = splts[1]
         col_selected = splts[2]
     end
     generated = DB_EXTENSION.tables[string(table_selected)][string(col_selected)]
     return(0, join((string(gen) for gen in generated), ";"))
 end
+# get row
+
+# get observation index
 
 #==
 example set header (| is bit-defined data-separation for header)
