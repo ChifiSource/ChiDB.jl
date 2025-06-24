@@ -5,34 +5,7 @@ import Base: parse
 using AlgebraStreamFrames
 import AlgebraStreamFrames: get_datatype, StreamDataType
 using Nettle
-#==
-COMMAND TABLE:
-# server
-S - login
-U - list users
-C - create user
-K - set password
 
-# query
-s - select
-j - join
-b - reference join
-c - get column
-w - get row
-v - value
-l - list tables
-g - get observation index
-d - delete at
-t - create table
-z - delete table
-m - view table
-x - list columns
-n - set type
-p - compare
-i - in
-a - store
-r - rename
-==#
 #==
 OPCODE
 ------
@@ -346,74 +319,13 @@ end
 DB_EXTENSION = DeeBee("")
 
 function perform_command!(user::DBUser, cmd::Type{DBCommand{<:Any}}, args::AbstractString ...)
-    return(1, "")
+    return(1, "command does not exist")
 end
-# list tables
-function perform_command!(user::DBUser, cmd::Type{DBCommand{:l}}, args::AbstractString ...)
-    list = keys(DB_EXTENSION.tables)
-    return(0, 
-        join(
-    "$k ($(length(DB_EXTENSION.tables[k].names)) columns)\n" for k in keys(DB_EXTENSION.tables)))
-end
-# list columns
-function perform_command!(user::DBUser, cmd::Type{DBCommand{:x}}, args::AbstractString ...)
-    table = ""
-    column = ""
-    if length(args) < 0
-
-    end
-    return(0, "")
-end
-# select table
-function perform_command!(user::DBUser, cmd::Type{DBCommand{:s}}, args::AbstractString ...)
-    user.table = args[1]
-    return(0, "")
-end
-# create table
-function perform_command!(user::DBUser, cmd::Type{DBCommand{:t}}, args::AbstractString ...)
-    if length(args) < 0
-        return(2, "create table requires name")
-    end
-    newname = args[1]
-    if newname in keys(DB_EXTENSION.tables)
-        return(2, "table $newname exists")
-    end
-    new_table = StreamFrame{:ff}()
-    push!(DB_EXTENSION.tables, newname => new_table)
-    mkdir(DB_EXTENSION.dir * "/$newname")
-    return(0, "")
-end
-# get column
-function perform_command!(user::DBUser, cmd::Type{DBCommand{:c}}, args::AbstractString ...)
-    if length(args) < 1
-        return(2, "create column requires a column directory")
-    end
-    table_selected = ""
-    col_selected = ""
-    if ~(contains(args, "/"))
-        if user.table == ""
-            return(2, "proper table path not selected")
-        end
-        table_selected = user.table
-        col_selected = args
-    else
-        splts = split(args, "/")
-        table_selected = splts[1]
-        col_selected = splts[2]
-    end
-    generated = DB_EXTENSION.tables[string(table_selected)][string(col_selected)]
-    return(0, join((string(gen) for gen in generated), ";"))
-end
-# get row
-
-# get observation index
-
 #==
-example set header (| is bit-defined data-separation for header)
+example set header (| is bit-defined data-separation for header, 
+                    do not include this character)
 OPTRANSB|S|username db_key password
 ==#
-
-
 function start(path::String, ip::IP4 = "127.0.0.1":8005)
     DB_EXTENSION.dir = path
     start!(:TCP, ChiDB, ip, async = false)
