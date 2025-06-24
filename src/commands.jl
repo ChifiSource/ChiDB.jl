@@ -4,14 +4,13 @@ COMMAND TABLE:
 S - login
 U - list users
 C - create user
-K - set password
+K - set
 
 # query
 #  table management
 l - list
 s - select
 t - create
-m - view table
 
 # get-store
 g - get
@@ -21,7 +20,6 @@ a - store
 
 # column management
 j - join
-b - reference join
 k - set type
 e - rename
 
@@ -68,7 +66,7 @@ end
 # create table
 function perform_command!(user::DBUser, cmd::Type{DBCommand{:t}}, args::AbstractString ...)
     if length(args) < 1
-        return(2, "create table requires name")
+        return(2, "create requires table name or column")
     end
     newname = args[1]
     if newname in keys(DB_EXTENSION.tables)
@@ -146,6 +144,75 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:r}}, args::Abstract
 end
 # get index
 function perform_command!(user::DBUser, cmd::Type{DBCommand{:i}}, args::AbstractString ...)
+    colrow = args[1]
+
+end
+
+# store
+function perform_command!(user::DBUser, cmd::Type{DBCommand{:a}}, args::AbstractString ...)
+    colrow = args[1]
+
+end
+#==
+column management
+==#
+# join
+function perform_command!(user::DBUser, cmd::Type{DBCommand{:j}}, args::AbstractString ...)
+    colrow = args[1]
+
+end
+# set type
+function perform_command!(user::DBUser, cmd::Type{DBCommand{:k}}, args::AbstractString ...)
+    colrow = args[1]
+
+end
+# rename
+function perform_command!(user::DBUser, cmd::Type{DBCommand{:e}}, args::AbstractString ...)
+    colrow = args[1]
+
+end
+
+#==
+deleters
+==#
+# delete at
+function perform_command!(user::DBUser, cmd::Type{DBCommand{:d}}, args::AbstractString ...)
+    colrow = args[1]
+
+end
+# delete
+function perform_command!(user::DBUser, cmd::Type{DBCommand{:z}}, args::AbstractString ...)
+    colrow = args[1]
+
+end
+# compare
+function perform_command!(user::DBUser, cmd::Type{DBCommand{:p}}, args::AbstractString ...)
+    colrow = args[1]
+
+end
+# in
+function perform_command!(user::DBUser, cmd::Type{DBCommand{:n}}, args::AbstractString ...)
+    colrow = args[1]
+
+end
+
+#==
+server
+==#
+# list users
+function perform_command!(user::DBUser, cmd::Type{DBCommand{:U}}, args::AbstractString ...)
+    colrow = args[1]
+
+end
+
+# create user
+function perform_command!(user::DBUser, cmd::Type{DBCommand{:C}}, args::AbstractString ...)
+    colrow = args[1]
+
+end
+
+# set
+function perform_command!(user::DBUser, cmd::Type{DBCommand{:K}}, args::AbstractString ...)
     colrow = args[1]
 
 end

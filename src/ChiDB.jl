@@ -5,7 +5,11 @@ import Base: parse
 using AlgebraStreamFrames
 import AlgebraStreamFrames: get_datatype, StreamDataType
 using Nettle
-
+#=== header
+#==
+1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16
+|    opcode   | transac ID    |          command byte           |       
+==#
 #==
 OPCODE
 ------
@@ -24,6 +28,7 @@ password set  | bad dbkey (connection closed)
               | bad transaction (connection closed)
               | 1111
 ==#
+===#
 make_transaction_id() = begin
     sampler = ("0", "1")
     join(sampler[rand(1:2)] for val in 1:4)
@@ -183,11 +188,6 @@ function on_start(data::Dict{Symbol, Any}, db::DeeBee)
     push!(data, :DB => db)
 end
 
-#==
-1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16
-|    opcode   | transac ID    |          command byte           |       
-==#
-
 function parse_db_header(header::String)
     if ~(length(header) == 2)
         throw("Invalid DB header: length does not equal two.")
@@ -283,12 +283,11 @@ verify = handler() do c::Toolips.SocketConnection
         try
             opcode, trans_id, cmd = parse_db_header(query[1:2])
         catch
-            header = "1000" * make_transaction_id() * "\n"
+            header = "1000" * make_transaction_id()
+            write!(c, "$(Char(parse(UInt8, header, base = 2)))")
+            continue
         end
         if trans_id != selected_user.transaction_id
-            @warn "transid bad"
-            @info trans_id
-            @info selected_user.transaction_id
             header = "1111" * make_transaction_id()
             write!(c, "$(Char(parse(UInt8, header, base = 2)))")
             return
@@ -298,13 +297,16 @@ verify = handler() do c::Toolips.SocketConnection
         if length(query) > 2
             args = split(query[3:end], "|!|")
         end
-        success, output = perform_command!(selected_user, command, args ...)
+        success, output = (nothing, nothing)
+        try
+            success, output = perform_command!(selected_user, command, args ...)
+        catch e
+            @warn e
+            continue
+        end
         trans_id = make_transaction_id()
         selected_user.transaction_id = trans_id
         header = ""
-        @warn command
-        @warn success
-        @info output
         output = "\n" * output
         if success == 0
             header = "0001" * trans_id
@@ -335,11 +337,6 @@ end
 
 include("commands.jl")
 
-#==
-example set header (| is bit-defined data-separation for header, 
-                    do not include this character)
-OPTRANSB|S|username db_key password
-==#
 function start(path::String, ip::IP4 = "127.0.0.1":8005)
     @warn "ChiDB is not yet fully functional or ready for production use."
     @info "this version is primarily being used for testing, at the moment. This project is a work-in-progress."
