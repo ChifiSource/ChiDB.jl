@@ -60,9 +60,9 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:l}}, args::Abstract
             return(2, "$name is not a table, to list all tables provide no arguments.")
         end
         selected_table = DB_EXTENSION.tables[name]
-        colstr = join((begin
+        colstr = join([begin
             "$(selected_table.names[e]) $(selected_table.T[e])!N"
-        end for e in 1:length(selected_table.names)))
+        end for e in 1:length(selected_table.names)], "\n")
         return(0, "$name ($(length(selected_table.names)) columns $(length(selected_table)) rows !N" * colstr)
     end
     list = keys(DB_EXTENSION.tables)
@@ -168,16 +168,16 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:r}}, args::Abstract
     end
     gen = DB_EXTENSION.tables[table_selected]
     result = join((begin
-        (join(string(val)) * "!;" for val in row.values), "!N")
-    end for row in eachrow(gen)[ind])
+        join((string(val) for val in row.values), "!;")
+    end for row in eachrow(gen)[ind]), "\n")
     return(0, result)
 end
 # get index
 function perform_command!(user::DBUser, cmd::Type{DBCommand{:i}}, args::AbstractString ...)
     selected_table, col_selected = get_selected_col(user, args[1])
     value = args[2]
-    sel = DB_EXTENSION.tables[selected_table]
-    gen = sel[col_selected]
+    sel = DB_EXTENSION.tables[string(selected_table)]
+    gen = sel[string(col_selected)]
     ind = findfirst(x -> string(x) == value, gen)
     if isnothing(ind)
         return(0, "0")
@@ -196,16 +196,18 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:a}}, args::Abstract
     if n == 2
         val = args[2]
         writevals = split(val, "!;")
-        store_into!(tbl, selected_table, writevals ...)
+        store_into!(string(tbl), selected_table, writevals ...)
+        selected_table.length += 1
     else n == 3
         pos = args[2]
         val = args[3]
         writevals = split(val, "!;")
-        store_into!(parse(pos, Int64), tbl, selected_table, writevals ...)
+        store_into!(parse(pos, Int64), string(tbl), selected_table, writevals ...)
     end
+    return(0, "added row")
 end
 
-function store_into!(name::String, selected_table::AlgebraStreamFrames.AlgebraFrames.AbstractAlgebraFrame, writevals::Any ...)
+function store_into!(tblname::AbstractString, selected_table::AlgebraStreamFrames.AlgebraFrames.AbstractAlgebraFrame, writevals::Any ...)
     table_paths = keys(selected_table.paths)
     refwrites = Dict()
     for cole in 1:length(selected_table.names)
@@ -215,8 +217,8 @@ function store_into!(name::String, selected_table::AlgebraStreamFrames.AlgebraFr
             push!(refwrites, colname => writevals[e])
             continue
         end
-        open(table_paths[colname], "a") do o::IOStream
-            write(o, writevals[cole])
+        open(selected_table.paths[colname], "a") do o::IOStream
+            write(o, writevals[cole] * "\n")
         end
     end
     if tblname in keys(DB_EXTENSION.refinfo)
@@ -226,12 +228,13 @@ function store_into!(name::String, selected_table::AlgebraStreamFrames.AlgebraFr
                 this_T = this_table.T[cole]
                 colname = this_table.names[cole]
                 if colname in keys(refwrites)
-                    refwrites[colname]
+                    string(refwrites[colname]) * "\n"
                 else
                     AlgebraStreamFrames.AlgebraFrames.algebra_initializer(this_T)
                 end
             end for cole in 1:length(this_table.names))
             store_into!(reftable, this_table, vals ...)
+            this_table.length += 1
         end
     end
 end
@@ -242,7 +245,45 @@ column management
 # join
 function perform_command!(user::DBUser, cmd::Type{DBCommand{:j}}, args::AbstractString ...)
     colrow = args[1]
-
+    table = args[1]
+    n = length(args)
+    T = nothing
+    colname = nothing
+    table = nothing
+    if n < 2
+        return(2, "invalid arguments (join requires at least 2 arguments)")
+    elseif n == 2
+        if user.table == ""
+            return(2, "no table selected to join to")
+        end
+        table = user.table
+        if contains(args[2], "/")
+            touch(DB_EXTENSION.dir * "/$table/" * "$(args[2]).ref")
+            nm_splits = split(args[2], "/")
+            reftable = string(nm_splits[1]) 
+            refcol = string(nm_splits[2])
+            join!(DB_EXTENSION.tables[table], string(colname) => T) do e
+                db.tables[reftable][refcol][e]
+            end
+            return(0, "")
+        end
+        T = args[1]
+        colname = args[2]
+    elseif n == 3
+        table = string(args[1])
+        T = args[2]
+        colname = args[3]
+    end
+    n = length(DB_EXTENSION.tables[table])
+    newpath = DB_EXTENSION.dir * "/$table/$colname.ff"
+    touch(newpath)
+    open(newpath, "w") do o::IOStream
+        write(o, string(T) * "\n")
+        val = AlgebraStreamFrames.AlgebraFrames.algebra_initializer(T)(1)
+        write(o, join((string(val) for x in 1:n), "\n"))
+    end
+    join!(DB_EXTENSION.tables[table], T, string(colname) => newpath)
+    return(0, "")
 end
 # set type
 function perform_command!(user::DBUser, cmd::Type{DBCommand{:k}}, args::AbstractString ...)

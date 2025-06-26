@@ -93,6 +93,8 @@ function command!(db::DeeBee, command::DBCommand{<:Any})
 end
 
 load_schema!(db::DeeBee) = begin
+    db.tables = Dict{String, StreamFrame}()
+    db.refinfo = Dict{String, Vector{String}}()
     for path in readdir(db.dir)
         table_path::String = db.dir * "/" * path
         if ~(isdir(table_path)) || path == "db"
