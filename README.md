@@ -65,4 +65,94 @@ end
 write!(sock, resp[1:1] * "l")
 ```
 ###### commands
+- `()` indicates an optional argument.
+<table>
+  <tr>
+    <th>header character</th>
+    <th>name</th>
+    <th>description</th>
+    <th>standard name</th>
+    <th>arguments</th>
+  </tr>
+  <tr>
+    <td align="center">l</td>
+    <td>list</td>
+    <td>lists the columns within a table, and their types, or lists all tables when provided with no argument</td>
+    <td>list</td>
+    <td>(table)</td>
+  </tr>
+    <tr>
+    <td align="center">s</td>
+    <td align="center">select</td>
+    <td>Selects a table.</td>
+    <td align="center">select</td>
+    <td>table</td>
+  </tr>
+</table>
+
 ###### opcodes
+
+<div align="center">
+<table>
+  <tr>
+  <th>code</th>
+  <th>status</th>
+  <th>name</th></th>
+  <th>has output</th>
+</tr>
+  <tr>
+    <td align="center">0001</td>
+    <td align="center"><b>OK</b></td>
+    <td align="center">query accept</td>
+    <td align="center">false</td>
+  </tr>
+    <tr>
+    <td align="center">0011</td>
+    <td align="center"><b>OK</b></td>
+    <td align="center">user created</td>
+    <td align="center">false</td>
+  </tr>
+  <tr>
+    <td align="center">0101</td>
+    <td align="center"><b>OK</b></td>
+    <td align="center">password set</td>
+    <td align="center">false</td>
+  </tr>
+    <tr>
+    <td align="center">1000</td>
+    <td align="center"><b>ERROR</b></td>
+    <td align="center">bad packet</td>
+    <td align="center">false</td>
+  </tr>
+      <tr>
+    <td align="center">1100</td>
+    <td align="center"><b>ERROR</b></td>
+    <td align="center">login denied (connection closed)</td>
+    <td align="center">false</td>
+  </tr>
+        <tr>
+    <td align="center">1010</td>
+    <td align="center"><b>ERROR</b></td>
+    <td align="center">bad dbkey (connection closed)</td>
+    <td align="center">false</td>
+  </tr>
+    <tr>
+    <td align="center">1110</td>
+    <td align="center"><b>ERROR</b></td>
+    <td align="center">command error</td>
+    <td align="center">true</td>
+  </tr>
+      <tr>
+    <td align="center">1010</td>
+    <td align="center"><b>ERROR</b></td>
+    <td align="center">argument error</td>
+    <td align="center">true</td>
+  </tr>
+        <tr>
+    <td align="center">1111</td>
+    <td align="center"><b>ERROR</b></td>
+    <td align="center">bad transaction (connection closed)</td>
+    <td align="center">false</td>
+  </tr>
+</table>
+</div>
