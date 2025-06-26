@@ -5,6 +5,7 @@ S - login
 U - list users
 C - create user
 K - set
+L - logout
 
 # query
 #  table management
@@ -35,6 +36,23 @@ n - in
 Table Commands
 ==#
 # list tables
+function get_selected_col(user::DBUser, arg::AbstractString)
+    table_selected = ""
+    col_selected = ""
+    if ~(contains(arg, "/"))
+        if user.table == ""
+            return(2, "proper table path not selected")
+        end
+        table_selected = user.table
+        col_selected = arg
+    else
+        splts = split(arg, "/")
+        table_selected = splts[1]
+        col_selected = splts[2]
+    end
+    return(table_selected, col_selected)
+end
+
 function perform_command!(user::DBUser, cmd::Type{DBCommand{:l}}, args::AbstractString ...)
     if length(args) > 0
         name = args[1]
@@ -85,21 +103,9 @@ Get-store commands
 function perform_command!(user::DBUser, cmd::Type{DBCommand{:g}}, args::AbstractString ...)
     n = length(args)
     if n < 1
-        return(2, "create column requires a column directory")
+        return(2, "get column requires a column directory")
     end
-    table_selected = ""
-    col_selected = ""
-    if ~(contains(args[1], "/"))
-        if user.table == ""
-            return(2, "proper table path not selected")
-        end
-        table_selected = user.table
-        col_selected = args[1]
-    else
-        splts = split(args[1], "/")
-        table_selected = splts[1]
-        col_selected = splts[2]
-    end
+    table_selected, col_selected = get_selected_col(user, args[1])
     if n > 1
         range_sel = args[2]
         @info range_sel
@@ -109,10 +115,13 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:g}}, args::Abstract
                 ">=" => >=, ">" => >)
             if n < 5
                 if ~(args[4] in keys(wherelookup))
-
+                    return(2, "unrecognized operator: $(args[4])")
                 end
                 filter
                 wherelookup[args[4]](args[3], args[5])
+                generated = generate(DB_EXTENSION.tables[string(table_selected)])
+                filter!(row -> wherelookup[args[4]](string(row[args[3]]), row[args[5]]), generated)
+                return(0, "future tablestring")
             end
         end
         if contains(range_sel, ":")
@@ -139,20 +148,94 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:g}}, args::Abstract
 end
 # get row
 function perform_command!(user::DBUser, cmd::Type{DBCommand{:r}}, args::AbstractString ...)
-    colrow = args[1]
-
+    table_selected = ""
+    ind = ""
+    if length(args) > 1
+        table_selected = args[1]
+        ind = args[2]
+    else
+        if user.table == ""
+            return(2, "no table provided or selected for row")
+        end
+        table_selected = user.table
+        ind = args[1]
+    end
+    if contains(ind, ":")
+        parts = split(ind, ":")
+        ind = parse(Int64, ind[1]):parse(Int64, ind[2])
+    else
+        ind = parse(Int64, args[2])
+    end
+    gen = DB_EXTENSION.tables[table_selected]
+    result = join((begin
+        (join(string(val)) * "!;" for val in row.values), "!N")
+    end for row in eachrow(gen)[ind])
+    return(0, result)
 end
 # get index
 function perform_command!(user::DBUser, cmd::Type{DBCommand{:i}}, args::AbstractString ...)
-    colrow = args[1]
-
+    selected_table, col_selected = get_selected_col(user, args[1])
+    value = args[2]
+    sel = DB_EXTENSION.tables[selected_table]
+    gen = sel[col_selected]
+    ind = findfirst(x -> string(x) == value, gen)
+    if isnothing(ind)
+        return(0, "0")
+    end
+    return(0, string(ind))
 end
 
 # store
 function perform_command!(user::DBUser, cmd::Type{DBCommand{:a}}, args::AbstractString ...)
-    colrow = args[1]
-
+    n = length(args)
+    if n < 1
+        return(1, "command `a` takes 2-3 arguments")
+    end
+    tbl = args[1]
+    selected_table = DB_EXTENSION.tables[tbl]
+    if n == 2
+        val = args[2]
+        writevals = split(val, "!;")
+        store_into!(tbl, selected_table, writevals ...)
+    else n == 3
+        pos = args[2]
+        val = args[3]
+        writevals = split(val, "!;")
+        store_into!(parse(pos, Int64), tbl, selected_table, writevals ...)
+    end
 end
+
+function store_into!(name::String, selected_table::AlgebraStreamFrames.AlgebraFrames.AbstractAlgebraFrame, writevals::Any ...)
+    table_paths = keys(selected_table.paths)
+    refwrites = Dict()
+    for cole in 1:length(selected_table.names)
+        colname = selected_table.names[cole]
+        if ~(colname in table_paths)
+            # reftables
+            push!(refwrites, colname => writevals[e])
+            continue
+        end
+        open(table_paths[colname], "a") do o::IOStream
+            write(o, writevals[cole])
+        end
+    end
+    if tblname in keys(DB_EXTENSION.refinfo)
+        for reftable in DB_EXTENSION.refinfo[tblname]
+            this_table = DB_EXTENSION.tables[reftable]
+            vals = (begin
+                this_T = this_table.T[cole]
+                colname = this_table.names[cole]
+                if colname in keys(refwrites)
+                    refwrites[colname]
+                else
+                    AlgebraStreamFrames.AlgebraFrames.algebra_initializer(this_T)
+                end
+            end for cole in 1:length(this_table.names))
+            store_into!(reftable, this_table, vals ...)
+        end
+    end
+end
+
 #==
 column management
 ==#
@@ -199,15 +282,25 @@ end
 #==
 server
 ==#
+
+function perform_command!(user::DBUser, cmd::Type{DBCommand{:S}}, args::AbstractString ...)
+    return(1, "cannot login while logged in. please disconnect first.")
+end
+
 # list users
 function perform_command!(user::DBUser, cmd::Type{DBCommand{:U}}, args::AbstractString ...)
-    colrow = args[1]
-
+    return(0, join((user.username for user in DB_EXTENSION.users), "\n"))
 end
 
 # create user
 function perform_command!(user::DBUser, cmd::Type{DBCommand{:C}}, args::AbstractString ...)
-    colrow = args[1]
+    n = length(args)
+    if n == 0
+        return(1, "the create user command takes a username and optionally a password.")
+    end
+    newname = args[1]
+    newpd = args[2]
+    new_dbkey = Toolips.gen_ref(32)
 
 end
 
@@ -216,3 +309,10 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:K}}, args::Abstract
     colrow = args[1]
 
 end
+# logout
+function perform_command!(user::DBUser, cmd::Type{DBCommand{:L}}, args::AbstractString ...)
+
+    user.selected_table = ""
+    return(4, "")
+end
+

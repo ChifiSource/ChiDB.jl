@@ -74,12 +74,15 @@ mutable struct DeeBee <: Toolips.SocketServerExtension
     transaction_ids::Dict{IP4, String}
     # Stored transaction history (occassionally dumped)
     transactions::Vector{Transaction}
+    # reference info, helps keep row numbers consistent across all connected tables
+    refinfo::Dict{String, Vector{String}}
     cursors::Vector{DBUser}
     enc::Encryptor
     dec::Decryptor
     function DeeBee(dir::String)
         new(dir, Dict{String, StreamFrame}(), 
             Dict{IP4, String}(), Vector{Transaction}(), 
+            Dict{String, Vector{String}}(),
             Vector{DBUser}(), Encryptor("AES256", Toolips.gen_ref(32)), 
             Decryptor("AES256", Toolips.gen_ref(32)))
     end
@@ -110,6 +113,9 @@ load_schema!(db::DeeBee) = begin
             end
         end
         this_frame = StreamFrame(features ...)
+        if length(references) > 0
+            push!(db.refinfo, path => Vector{String}())
+        end
         for ref in references
             T = AlgebraStreamFrames.infer_type(readlines(db.dir * "/" * replace(ref, "_" => "/"))[1])
             namesplits = split(ref, "_")
@@ -118,6 +124,7 @@ load_schema!(db::DeeBee) = begin
             join!(this_frame, string(colname) => T) do e
                 db.tables[framename][colname][e]
             end
+            push!(db.refinfo[path], framename)
         end
         push!(db.tables, path => this_frame)
     end
@@ -318,6 +325,8 @@ verify = handler() do c::Toolips.SocketConnection
         elseif success == 2
             # argument error
             header = "1010" * trans_id
+        elseif success == 4
+            break
         end
         write!(c, "$(Char(parse(UInt8, header, base = 2)))%" * output * "\n")
         if length(c[:DB].transactions) > 50
