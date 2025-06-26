@@ -73,7 +73,8 @@ end
 # select table
 function perform_command!(user::DBUser, cmd::Type{DBCommand{:s}}, args::AbstractString ...)
     if length(args) < 1
-        return(2, "provide a table name to select.")
+        user.table = ""
+        return(0, "")
     end
     if ~(args[1] in keys(DB_EXTENSION.tables))
         return(2, "table $(args[1]) does not exist")
@@ -117,8 +118,6 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:g}}, args::Abstract
                 if ~(args[4] in keys(wherelookup))
                     return(2, "unrecognized operator: $(args[4])")
                 end
-                filter
-                wherelookup[args[4]](args[3], args[5])
                 generated = generate(DB_EXTENSION.tables[string(table_selected)])
                 filter!(row -> wherelookup[args[4]](string(row[args[3]]), row[args[5]]), generated)
                 return(0, "future tablestring")
@@ -288,12 +287,59 @@ end
 # set type
 function perform_command!(user::DBUser, cmd::Type{DBCommand{:k}}, args::AbstractString ...)
     colrow = args[1]
-
+    if length(args) < 2
+        return(2, "set type takes 2 arguments (table)/column Type")
+    end
+    table, col = get_selected_col(user, args[1])
+    if ~(table in keys(DB_EXTENSION.tables))
+        return(2, "table $table not found")
+    end
+    sel_table = DB_EXTENSION.tables[table]
+    if ~(col in sel_table.names)
+        return(2, "$col not in $table")
+    end
+    # get axis and actual T
+    axis = findfirst(x -> x == col, sel_table.names)
+    stream_type = StreamDataType{Symbol(args[2])}
+    sel_table.T[axis] = get_datatype(stream_type)
+    if col in keys(table.paths)
+        alllines = read(table.paths[col], String)
+        flinef = findfirst("\n", alllines)
+        output = if isnothing(flinef)
+            args[2] * "\n"
+        else
+            args[2] * [flinef:end]
+        end
+        open(table.paths[col], "w") do o::IOStream
+            write(o, output)
+        end
+        output = nothing
+        alllines = nothing
+    else
+        direc = readdir(DB_EXTENSION.dir * "/$table")
+        refname = findfirst(x -> contains(x, "$col.ref"), direc)
+        ref_tablen = split(direc[refname], "_")[1]
+        ref_table = DB_EXTENSION.tables[ref_tablen]
+        axis = findfirst(x -> x == col, reff_table.names)
+        ref_table.T[axis] = get_datatype(stream_type)
+        alllines = read(ref_table.paths[ref_tablen], String)
+        flinef = findfirst("\n", alllines)
+        output = if isnothing(flinef)
+            args[2] * "\n"
+        else
+            args[2] * [flinef:end]
+        end
+        open(table.paths[ref_tablen], "w") do o::IOStream
+            write(o, output)
+        end
+    end
+    return(0, "type set")
 end
 # rename
 function perform_command!(user::DBUser, cmd::Type{DBCommand{:e}}, args::AbstractString ...)
-    colrow = args[1]
-
+    if ~(length(args) == 2)
+        return(2, "rename takes two arguments.")
+    end
 end
 
 #==
@@ -301,23 +347,53 @@ deleters
 ==#
 # delete at
 function perform_command!(user::DBUser, cmd::Type{DBCommand{:d}}, args::AbstractString ...)
-    colrow = args[1]
+    n = length(args)
+    if n == 0
 
+    elseif n == 1
+
+    elseif n == 2
+
+    end
 end
 # delete
 function perform_command!(user::DBUser, cmd::Type{DBCommand{:z}}, args::AbstractString ...)
-    colrow = args[1]
 
 end
 # compare
 function perform_command!(user::DBUser, cmd::Type{DBCommand{:p}}, args::AbstractString ...)
-    colrow = args[1]
-
+    table, col = get_selected_col(user, cmd)
+    if typeof(table) == Int64
+        return(table, col)
+    end
+    if length(args) != 3
+        return(2, "compare takes three arguments")
+    end
+    index = parse(Int64, args[2])
+    sel_value = DB_EXTENSION.tables[table][col][index]
+    if string(sel_value) == args[3]
+        return(0, "1")
+    else
+        return(0, "0")
+    end
 end
 # in
 function perform_command!(user::DBUser, cmd::Type{DBCommand{:n}}, args::AbstractString ...)
-    colrow = args[1]
-
+    if length(args) != 2
+        return(2, "in takes a (table)/column and a value")
+    end
+    table, col = get_selected_col(user, cmd)
+    if typeof(table) == Int64
+        return(table, col)
+    end
+    sel_col = DB_EXTENSION.tables[table][col]
+    compval = args[2]
+    found = findfirst(val -> string(val) == compval, sel_col)
+    if ~(isnothing(found))
+        return(0, "1")
+    else
+        return(0, "0")
+    end
 end
 
 #==
@@ -340,19 +416,29 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:C}}, args::Abstract
         return(1, "the create user command takes a username and optionally a password.")
     end
     newname = args[1]
-    newpd = args[2]
+    newpd = if n == 1
+        gen_ref(32)
+    else
+        args[2]
+    end
     new_dbkey = Toolips.gen_ref(32)
-
+    return(0, "$(newname)!;$(newpd)!;$(new_dbkey)")
 end
 
 # set
 function perform_command!(user::DBUser, cmd::Type{DBCommand{:K}}, args::AbstractString ...)
-    colrow = args[1]
+    n = length(args)
+    if n == 2
 
+    elseif n == 3
+
+    else
+        return(2, "'set' takes at most 3 arguments, at minimum 2 (user, name, pwd)")
+    end
+    return(0, "")
 end
 # logout
 function perform_command!(user::DBUser, cmd::Type{DBCommand{:L}}, args::AbstractString ...)
-
     user.selected_table = ""
     return(4, "")
 end
