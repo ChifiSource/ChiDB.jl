@@ -309,6 +309,7 @@ verify = handler() do c::Toolips.SocketConnection
             success, output = perform_command!(selected_user, command, args ...)
         catch e
             @warn e
+            throw(e)
             continue
         end
         trans_id = make_transaction_id()
