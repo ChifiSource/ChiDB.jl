@@ -163,7 +163,7 @@ function setup_dbdir(db::DeeBee, dir::Bool = false)
         write(o, "admin")
     end
     open(secrets_dir, "w") do o::IOStream
-        write(o, String(encrypt(db.enc, admin_ref)) * "DIV" * admin_keyenc * "!EOF")
+        write(o, String(encrypt(db.enc, add_padding_PKCS5(Vector{UInt8}(admin_ref), 16))) * "DIV" * admin_keyenc * "!EOF")
     end
     @info "ChiDB server started for the first time at $(db.dir)"
     @info "admin login: ($admin_keyenc) admin $admin_ref"
@@ -171,6 +171,7 @@ function setup_dbdir(db::DeeBee, dir::Bool = false)
 end
 
 function load_db!(db::DeeBee)
+    db.cursors = Vector{DBUser}()
     if ~(isdir(db.dir * "/db"))
         setup_dbdir(db, true)
     elseif ~(isfile(db.dir * "/db/key.pem"))
@@ -189,6 +190,14 @@ function load_db!(db::DeeBee)
     db.enc = Encryptor("AES256", hmac)
     db.dec = Decryptor("AES256", hmac)
     @info String(decrypt(db.dec, Vector{UInt8}(db.cursors[1].pwd)))
+end
+
+function save_users(db::DeeBee)
+    secrets = ""
+    users = ""
+    for user in db.cursors
+        pwd = ""
+    end
 end
 
 function on_start(data::Dict{Symbol, Any}, db::DeeBee)
@@ -242,7 +251,7 @@ verify = handler() do c::Toolips.SocketConnection
             return
         end
         selected_user = cursors[usere]
-        if ~(pwd[1:end - 1] == String(decrypt(c[:DB].dec, selected_user.pwd)))
+        if ~(pwd[1:end - 1] == String(trim_padding_PKCS5(decrypt(c[:DB].dec, selected_user.pwd))))
             @info pwd[1:end - 1]
             @warn String(decrypt(c[:DB].dec, selected_user.pwd))
             header = "1100" * make_transaction_id() * "\n"
@@ -349,11 +358,11 @@ end
 
 include("commands.jl")
 
-function start(path::String, ip::IP4 = "127.0.0.1":8005)
+function start(path::String, ip::IP4 = "127.0.0.1":8005; async::Bool = false)
     @warn "ChiDB is not yet fully functional or ready for production use."
     @info "this version is primarily being used for testing, at the moment. This project is a work-in-progress."
     DB_EXTENSION.dir = path
-    start!(:TCP, ChiDB, ip, async = false)
+    start!(:TCP, ChiDB, ip, async = async)
 end
 
 export DB_EXTENSION, verify

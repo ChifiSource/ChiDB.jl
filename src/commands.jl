@@ -66,6 +66,9 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:l}}, args::Abstract
         return(0, "$name ($(length(selected_table.names)) columns $(length(selected_table)) rows !N" * colstr)
     end
     list = keys(DB_EXTENSION.tables)
+    if length(list) < 1
+        return(0, "empty data-base (0 columns)")
+    end
     return(0, 
         join(
     "$k ($(length(DB_EXTENSION.tables[k].names)) columns)\n" for k in keys(DB_EXTENSION.tables)))
@@ -308,7 +311,7 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:k}}, args::Abstract
         output = if isnothing(flinef)
             args[2] * "\n"
         else
-            args[2] * [flinef:end]
+            args[2] * alllines[flinef:end]
         end
         open(table.paths[col], "w") do o::IOStream
             write(o, output)
@@ -327,7 +330,7 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:k}}, args::Abstract
         output = if isnothing(flinef)
             args[2] * "\n"
         else
-            args[2] * [flinef:end]
+            args[2] * alllines[flinef:end]
         end
         open(ref_table.paths[ref_tablen], "w") do o::IOStream
             write(o, output)
@@ -338,8 +341,29 @@ end
 # rename
 function perform_command!(user::DBUser, cmd::Type{DBCommand{:e}}, args::AbstractString ...)
     if ~(length(args) == 2)
-        return(2, "rename takes two arguments.")
+        return(2, "rename takes two arguments (column and newname)")
     end
+    if ~(contains(args[1], "/"))
+        if args[1] in keys(DB_EXTENSION.tables)
+            mv(DB_EXTENSION.dir * "/$(args[1])", DB_EXTENSION.dir * "/$(args[2])", force = true)
+            load_schema!(DB_EXTENSION)
+            return(0, "table renamed")
+        end
+    end
+    table, col = get_selected_col(user, args[1])
+    if typeof(table) == Int64
+        return(table, col)
+    end
+    sel_table = DB_EXTENSION.tables[table]
+    if ~(col in keys(sel_table.paths))
+        return(2, "cannot rename a reference column, rename the original column instead")
+    end
+    pos = findfirst(x -> x == col, sel_table.names)
+    sel_table.names[pos] = string(args[2])
+    new_fpath = DB_EXTENSION.dir * "/$table/$(args[2]).ff"
+    mv(sel_table.paths[col], new_fpath)
+    sel_table.paths[col] = new_fpath
+    return(0, "column renamed")
 end
 
 #==
@@ -356,7 +380,7 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:d}}, args::Abstract
         return(table, col)
     end 
     this_table = DB_EXTENSION.tables[table][col]
-
+    
 end
 # delete
 function perform_command!(user::DBUser, cmd::Type{DBCommand{:z}}, args::AbstractString ...)
@@ -450,14 +474,18 @@ end
 # set
 function perform_command!(user::DBUser, cmd::Type{DBCommand{:K}}, args::AbstractString ...)
     n = length(args)
-    if n == 2
-
-    elseif n == 3
-
-    else
+    if ~(n in (2, 3))
         return(2, "'set' takes at most 3 arguments, at minimum 2 (user, name, pwd)")
     end
-    return(0, "")
+    index = findfirst(usr -> usr.username == args[1], DB_EXTENSION.users)
+    if isnothing(index)
+        return(2, "user $(args[1]) not found")
+    end
+    this_user = DB_EXTENSION.users[index]
+    this_user.username = strings(arg[2])
+    this_user.pwd = encrypt(DB_EXTENSION.enc, Nettle.add_padding_PKCS5(Vector{UInt8}(args[3]), 16))
+    this_user.key = gen_ref(32)
+    return(0, "$(this_user.username)!;$(args[2])!;$(this_user.key)")
 end
 # logout
 function perform_command!(user::DBUser, cmd::Type{DBCommand{:L}}, args::AbstractString ...)
