@@ -320,7 +320,7 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:k}}, args::Abstract
         refname = findfirst(x -> contains(x, "$col.ref"), direc)
         ref_tablen = split(direc[refname], "_")[1]
         ref_table = DB_EXTENSION.tables[ref_tablen]
-        axis = findfirst(x -> x == col, reff_table.names)
+        axis = findfirst(x -> x == col, ref_table.names)
         ref_table.T[axis] = get_datatype(stream_type)
         alllines = read(ref_table.paths[ref_tablen], String)
         flinef = findfirst("\n", alllines)
@@ -329,7 +329,7 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:k}}, args::Abstract
         else
             args[2] * [flinef:end]
         end
-        open(table.paths[ref_tablen], "w") do o::IOStream
+        open(ref_table.paths[ref_tablen], "w") do o::IOStream
             write(o, output)
         end
     end
@@ -348,16 +348,38 @@ deleters
 # delete at
 function perform_command!(user::DBUser, cmd::Type{DBCommand{:d}}, args::AbstractString ...)
     n = length(args)
-    if n == 0
-
-    elseif n == 1
-
-    elseif n == 2
-
+    if n != 2
+        return(2, "deleteat requires two arguments")
     end
+    table, col = get_selected_col(user, cmd)
+    if typeof(table) == Int64
+        return(table, col)
+    end 
+    this_table = DB_EXTENSION.tables[table][col]
+
 end
 # delete
 function perform_command!(user::DBUser, cmd::Type{DBCommand{:z}}, args::AbstractString ...)
+    if length(args) < 1
+        if user.table == ""
+            return(2, "delete requires a row or table to delete")
+        else
+            
+        end
+    end
+    table = ""
+    col = ""
+    if contains(args[1], "/")
+
+    else
+        if ~(args[1] in keys(DB_EXTENSION.tables))
+            if user.table == ""
+                return(2, "$(args[1]) is not a table or column path. No valid table selected.")
+            end
+            
+        end
+
+    end
 
 end
 # compare
