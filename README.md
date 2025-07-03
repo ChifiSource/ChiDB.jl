@@ -66,27 +66,43 @@ write!(sock, resp[1:1] * "l")
 ```
 ###### commands
 - `()` indicates an optional argument.
+- `(table)/column` indicates the ability to provide the column if a table is selected.
 <table>
   <tr>
-    <th>header character</th>
+    <th>character</th>
     <th>name</th>
     <th>description</th>
-    <th>standard name</th>
     <th>arguments</th>
   </tr>
   <tr>
     <td align="center">l</td>
-    <td>list</td>
+    <td align="center">list</td>
     <td>lists the columns within a table, and their types, or lists all tables when provided with no argument</td>
-    <td>list</td>
-    <td>(table)</td>
+    <td align="center">(table)</td>
   </tr>
     <tr>
     <td align="center">s</td>
     <td align="center">select</td>
-    <td>Selects a table.</td>
-    <td align="center">select</td>
+    <td align="center">Selects a table.</td>
     <td>table</td>
+  </tr>
+    <tr>
+    <td align="center">t</td>
+    <td align="center">create</td>
+    <td align="center">creates a new table</td>
+    <td>tablename</td>
+  </tr>
+      <tr>
+    <td align="center">g</td>
+    <td align="center">get</td>
+    <td align="center">gets values using vertical indexing</td>
+    <td>(table)/column (range)</td>
+  </tr>
+        <tr>
+    <td align="center">r</td>
+    <td align="center">getrow</td>
+    <td align="center">Gets a full row of data</td>
+    <td>(table)/column rown</td>
   </tr>
 </table>
 
