@@ -2,7 +2,7 @@
 
 julia_version = "1.11.5"
 manifest_format = "2.0"
-project_hash = "cb53dbb2ba93bd4b0553c4c8b4534dd39c6c53b9"
+project_hash = "61b2b69492123821d69c331b17cfb1d2976c4174"
 
 [[deps.AlgebraFrames]]
 path = "../../../algebraframes/AlgebraFrames.jl"

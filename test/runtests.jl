@@ -76,11 +76,48 @@ admin
         end
     end
     sock = ChiDB.Toolips.connect("127.0.0.1":8005)
+    curr_header = 'c'
     @testset "login" begin
-
+        # dbkey error
+        write!(sock, "aShjqyoktipaporlrzepcdaouwtyseragargch admin wztycvtmqqkqjrba\n")
+        resp = String(readavailable(sock))
+        header = bitstring(UInt8(resp[1]))
+        opcode = header[1:4]
+        @test opcode == "1010"
+        # login error
+        sock = ChiDB.Toolips.connect("127.0.0.1":8005)
+        write!(sock, "aShjqyoktipaporlrzepcdaouwtysqtjch admin wztychgterehjrba\n")
+        resp = String(readavailable(sock))
+        header = bitstring(UInt8(resp[1]))
+        opcode = header[1:4]
+        @test opcode == "1100"
+        # success
+        sock = ChiDB.Toolips.connect("127.0.0.1":8005)
+        write!(sock, "aShjqyoktipaporlrzepcdaouwtysqtjch admin wztycvtmqqkqjrba\n")
+        resp = String(readavailable(sock))
+        header = bitstring(UInt8(resp[1]))
+        opcode = header[1:4]
+        @test opcode == "0001"
+        @test ChiDB.DB_EXTENSION.cursors[1].transaction_id != ""
+        curr_header = Char(UInt8(resp[1]))
     end
-    @testset "queries" begin
+    @testset "queries" verbose = true begin
+        @testset "list (l)" begin
+            write!(sock, "$(curr_header)l\n")
+            resp = String(readavailable(sock))
+            @test contains(resp, "tab1")
 
+            write!(sock, "$(curr_header)l\n")
+        end
+        @testset "select (s)" begin
+
+        end
+        @testset "create (t)" begin
+
+        end
+        @testset "get (g)" begin
+
+        end
     end
     @testset "query commands" verbose = true begin
 
