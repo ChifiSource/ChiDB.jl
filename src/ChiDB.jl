@@ -55,18 +55,6 @@ end
 
 string(ts::Transaction) = "$(ts.id)|$(ts.username): $(ts.cmd) ; $(operands)\n"
 
-mutable struct Crypt
-    values::String
-end
-
-string(c::Crypt) = begin 
-    String(decrypt(ChiDB.DB_EXTENSION.dec, Vector{UInt8}(db.cursors[1].pwd)))::String
-end
-
-get_datatype(std::Type{StreamDataType{:Crypt}}) = Crypt
-
-parse(T::Type{Crypt}, raw::String) = Crypt(raw)::Crypt
-
 mutable struct DeeBee <: Toolips.SocketServerExtension
     dir::String
     tables::Dict{String, StreamFrame}
@@ -134,10 +122,11 @@ end
 
 function dump_transactions!(db::DeeBee)
     open(db.dir * "/db/history.txt", "a") do o::IOStream
-        for tsact in db.transactions
+        for (e, tsact) in enumerate(db.transactions)
             write(o, string(tsact))
         end
     end
+    db.transactions = Vector{Transaction}()
 end
 
 function setup_dbdir(db::DeeBee, dir::Bool = false)
@@ -301,6 +290,7 @@ verify = handler() do c::Toolips.SocketConnection
         try
             opcode, trans_id, cmd = parse_db_header(query[1:2])
         catch
+            query = ""
             header = "1000" * make_transaction_id()
             write!(c, "$(Char(parse(UInt8, header, base = 2)))")
             continue
@@ -319,6 +309,7 @@ verify = handler() do c::Toolips.SocketConnection
         try
             success, output = perform_command!(selected_user, command, args ...)
         catch e
+            query = ""
             @warn e
             throw(e)
             continue

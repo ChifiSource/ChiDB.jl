@@ -50,6 +50,11 @@ function get_selected_col(user::DBUser, arg::AbstractString)
         table_selected = splts[1]
         col_selected = splts[2]
     end
+    if ~(table_selected in keys(DB_EXTENSION.tables))
+        return(2, "$table_selected not found in DB")
+    elseif ~(col_selected in names(DB_EXTENSION.tables[table_selected]))
+        return(2, "column $col_selected not found in $table_selected")
+    end
     return(table_selected, col_selected)
 end
 
@@ -110,6 +115,9 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:g}}, args::Abstract
         return(2, "get column requires a column directory")
     end
     table_selected, col_selected = get_selected_col(user, args[1])
+    if typeof(table_selected) == Int64
+        return(table_selected, col)
+    end
     if n > 1
         range_sel = args[2]
         @info range_sel
@@ -177,6 +185,9 @@ end
 # get index
 function perform_command!(user::DBUser, cmd::Type{DBCommand{:i}}, args::AbstractString ...)
     selected_table, col_selected = get_selected_col(user, args[1])
+    if typeof(selected_table) == Int64
+        return(selected_table, col)
+    end
     value = args[2]
     sel = DB_EXTENSION.tables[string(selected_table)]
     gen = sel[string(col_selected)]
@@ -246,8 +257,6 @@ column management
 ==#
 # join
 function perform_command!(user::DBUser, cmd::Type{DBCommand{:j}}, args::AbstractString ...)
-    colrow = args[1]
-    table = args[1]
     n = length(args)
     T = nothing
     colname = nothing
@@ -255,10 +264,19 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:j}}, args::Abstract
     if n < 2
         return(2, "invalid arguments (join requires at least 2 arguments)")
     elseif n == 2
-        if user.table == ""
-            return(2, "no table selected to join to")
+        if contains(args[1], "/")
+            splts = split(args[1], "/")
+            colname = string(splts[2])
+            table = string(splts[1])
+        else
+            if user.table == ""
+                return(2, "no table selected to join to")
+            end
+            table = user.table
+            colname = args[1]
         end
-        table = user.table
+        T = args[2]
+        # reference join?
         if contains(args[2], "/")
             touch(DB_EXTENSION.dir * "/$table/" * "$(args[2]).ref")
             nm_splits = split(args[2], "/")
@@ -269,13 +287,12 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:j}}, args::Abstract
             end
             return(0, "")
         end
-        T = args[1]
+    else
+        T = args[3]
         colname = args[2]
-    elseif n == 3
-        table = string(args[1])
-        T = args[2]
-        colname = args[3]
+        table = args[1]
     end
+    T = get_datatype(AlgebraStreamFrames.StreamDataType{Symbol(T)})
     n = length(DB_EXTENSION.tables[table])
     newpath = DB_EXTENSION.dir * "/$table/$colname.ff"
     touch(newpath)
@@ -294,6 +311,9 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:k}}, args::Abstract
         return(2, "set type takes 2 arguments (table)/column Type")
     end
     table, col = get_selected_col(user, args[1])
+    if typeof(table) == Int64
+        return(table, col)
+    end
     if ~(table in keys(DB_EXTENSION.tables))
         return(2, "table $table not found")
     end
