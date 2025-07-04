@@ -12,8 +12,22 @@ wztycvtmqqkqjrba
 username:
 admin
 ==#
-@testset "chifi database server" verbose = true begin
-    testdb_dir = SRCDIR * "/testdb"
+testdb_dir = SRCDIR * "/testdb"
+curr_dir = readdir(testdb_dir)
+if length(curr_dir) > 4
+    @info "found bad files in db, cleaning"
+    necessary = ("db", "tab1", "tab3", "vals")
+    for dir in curr_dir
+        if dir in necessary
+            continue
+        end
+        rm(testdb_dir * "/" * dir, force = true)
+    end
+end
+
+curr_dir = nothing
+
+@testset "chifi database server" verbose = true begin 
     @testset "load db and schema" begin
         ext.dir = testdb_dir
         successful_load = try 
@@ -130,10 +144,31 @@ admin
             curr_header = Char(UInt8(resp[1]))
         end
         @testset "select (s)" begin
-
+            @warn "$(curr_header)stab1\n"
+            write!(sock, "$(curr_header)stab1\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            curr_header = Char(UInt8(resp[1]))
+            @test opcode == "0001"
+            if opcode != "0001"
+                @warn resp
+            end
+            @test ChiDB.DB_EXTENSION.cursors[1].table == "tab1"
+            write!(sock, "$(curr_header)sthrhtrhth\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            curr_header = Char(UInt8(resp[1]))
+            @test opcode == "1010"
         end
         @testset "create (t)" begin
-
+            write!(sock, "$(curr_header)tnewt\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            curr_header = Char(UInt8(resp[1]))
+            @test opcode == "0001"
         end
         @testset "get (g)" begin
 
