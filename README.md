@@ -4,6 +4,21 @@
 
 ###### a toolips-based data-base server
 `ChiDB` is a unique data-base server designed around the `AlgebraFrames` concept and the `.ff` file format. Schema is laid using directories and filenames and data is live-read into memory. This is currently in a state of relative infancy, but is primarily being developed for my own use cases and to demonstrate the various server-building capabilities of `Toolips`.
+- [get started]()
+  - [adding chidb](#adding)
+  - [documentation](#documentation)
+  - [chidb setup](#setup)
+- [loading schema](#loading-schema)
+  - [schema directories](#schema-directories)
+  - [readable data-types](#readable-data-types)
+  - [editing schema](#editing-schema)
+- [querying](#querying)
+  - [querying basics]()
+  - [command list](#commands)
+- [building a client]()
+  - [chidb headers](#headers)
+  - [existing clients]()
+  - [opcode RFC](#opcodes)
 ## setup
 In order to use `ChiDB`, we first need [julia](https://julialang.org). With Julia installed, the package may be added with `Pkg`:
 ```julia
@@ -103,6 +118,36 @@ write!(sock, resp[1:1] * "l")
     <td align="center">getrow</td>
     <td align="center">Gets a full row of data</td>
     <td>(table)/column rown</td>
+  </tr>
+          <tr>
+    <td align="center">i</td>
+    <td align="center">index</td>
+    <td align="center">Gets the index where a certain value occurs in a given table.</td>
+    <td>(table)/column value</td>
+  </tr>
+            <tr>
+    <td align="center">a</td>
+    <td align="center">store</td>
+    <td align="center">Stores values, separated by `!;`, into a given table. Will return an argument error if the incorrect shape is provided.</td>
+    <td>(table) value!;value2</td>
+  </tr>
+              <tr>
+    <td align="center">j</td>
+    <td align="center">join</td>
+    <td align="center">Adds a new column to a frame, creates a reference column when used with a column path from another table.</td>
+    <td>(table) (reftable)/colname (Type)</td>
+  </tr>
+                <tr>
+    <td align="center">k</td>
+    <td align="center">settype</td>
+    <td align="center">Attempts to cast a given type to a provided column.</td>
+    <td>(table)/colname Type</td>
+  </tr>
+                <tr>
+    <td align="center">e</td>
+    <td align="center">rename</td>
+    <td align="center">Renames a given column or table</td>
+    <td>(table) table_or_colname</td>
   </tr>
 </table>
 
