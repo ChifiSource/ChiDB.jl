@@ -271,6 +271,7 @@ verify = handler() do c::Toolips.SocketConnection
         end
         current_quer = String(readavailable(c))
         if current_quer == "\n"
+            yield()
             continue
         end
         query = query * current_quer
@@ -284,6 +285,7 @@ verify = handler() do c::Toolips.SocketConnection
         query = replace(query, "\n" => "")
         if query == "clear"
             query = ""
+            yield()
             continue
         end
         opcode, trans_id, cmd = (nothing, nothing, nothing)
@@ -312,6 +314,7 @@ verify = handler() do c::Toolips.SocketConnection
             query = ""
             @warn e
             throw(e)
+            yield()
             continue
         end
         trans_id = make_transaction_id()

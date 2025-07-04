@@ -1,4 +1,5 @@
 using ChiDB
+using ChiDB.Toolips
 using Test
 SRCDIR = @__DIR__
 const ext = ChiDB.DB_EXTENSION
@@ -18,7 +19,8 @@ admin
         successful_load = try 
             ChiDB.load_db!(ext)
             true
-        catch
+        catch e
+            throw(e)
             false
         end
         @test successful_load
@@ -43,7 +45,7 @@ admin
     @testset "internal functions" begin
         dbuser = ext.cursors[1]
         tab = "tab1/col1"
-        sel, col = ChiDB.get_selected_col(dbuser, tag)
+        sel, col = ChiDB.get_selected_col(dbuser, tab)
         @test sel == "tab1"
         @test col == "col1"
         # error
@@ -55,7 +57,9 @@ admin
         @test col == "col1"
         dbuser.table = ""
     end
+    sock = nothing
     @testset "server start" begin
+        @info "starting dbserver"
         procs = ChiDB.start(testdb_dir, async = true)
         @test typeof(procs) == ChiDB.Toolips.ProcessManager
         server_ns = names(ChiDB, all = true)
@@ -63,7 +67,6 @@ admin
         # reset tables check
         @test length(ext.tables) == 3
         @test length(ext.cursors) == 1
-        sock = nothing
         connected = try
             sock = ChiDB.Toolips.connect("127.0.0.1":8005)
             true
@@ -71,43 +74,60 @@ admin
             false
         end
         @test connected
-        if connected
-            close(sock)
-        end
     end
-    sock = ChiDB.Toolips.connect("127.0.0.1":8005)
     curr_header = 'c'
     @testset "login" begin
-        # dbkey error
-        write!(sock, "aShjqyoktipaporlrzepcdaouwtyseragargch admin wztycvtmqqkqjrba\n")
-        resp = String(readavailable(sock))
-        header = bitstring(UInt8(resp[1]))
-        opcode = header[1:4]
-        @test opcode == "1010"
-        # login error
-        sock = ChiDB.Toolips.connect("127.0.0.1":8005)
-        write!(sock, "aShjqyoktipaporlrzepcdaouwtysqtjch admin wztychgterehjrba\n")
-        resp = String(readavailable(sock))
-        header = bitstring(UInt8(resp[1]))
-        opcode = header[1:4]
-        @test opcode == "1100"
-        # success
-        sock = ChiDB.Toolips.connect("127.0.0.1":8005)
+        @info "performing login"
+        # success   
         write!(sock, "aShjqyoktipaporlrzepcdaouwtysqtjch admin wztycvtmqqkqjrba\n")
+        @warn "completed write"
         resp = String(readavailable(sock))
+        @warn "completed read"
         header = bitstring(UInt8(resp[1]))
         opcode = header[1:4]
         @test opcode == "0001"
         @test ChiDB.DB_EXTENSION.cursors[1].transaction_id != ""
         curr_header = Char(UInt8(resp[1]))
+        #==
+        # dbkey error
+        sock2 = ChiDB.Toolips.connect("127.0.0.1":8005)
+        write!(sock2, "aShjqyoktipaporlrzepcdaouwtyseragargch admin wztycvtmqqkqjrba\n")
+        resp = String(readavailable(sock2))
+        header = bitstring(UInt8(resp[1]))
+        opcode = header[1:4]
+        @test opcode == "1010"
+        # login error
+        sock2 = ChiDB.Toolips.connect("127.0.0.1":8005)
+        write!(sock2, "aShjqyoktipaporlrzepcdaouwtysqtjch admin wztychgterehjrba\n")
+        resp = String(readavailable(sock))
+        header = bitstring(UInt8(resp[1]))
+        opcode = header[1:4]
+        @test opcode == "1100"
+        ==#
     end
     @testset "queries" verbose = true begin
+        @info "performing queries"
+        @testset "command error" begin
+
+        end
         @testset "list (l)" begin
             write!(sock, "$(curr_header)l\n")
             resp = String(readavailable(sock))
             @test contains(resp, "tab1")
-
-            write!(sock, "$(curr_header)l\n")
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            @test opcode == "0001"
+            write!(sock, "$(Char(UInt8(resp[1])))ltab1\n")
+            resp = String(readavailable(sock))
+            @test contains(resp, "col1")
+            curr_header = Char(UInt8(resp[1]))
+            # argument error
+            write!(sock, "$(curr_header)lbabtaejthgejth\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            @test opcode == "1010"
+            curr_header = Char(UInt8(resp[1]))
         end
         @testset "select (s)" begin
 
