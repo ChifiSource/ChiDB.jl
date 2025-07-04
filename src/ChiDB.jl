@@ -20,7 +20,7 @@ query accept  | bad packet
 user created  | login denied (connection closed)
 0011          | 1100
 password set  | bad dbkey (connection closed)
-0101          | 1010
+0101          | 1001
               | command error
               | 1110
               | argument error
@@ -74,10 +74,6 @@ mutable struct DeeBee <: Toolips.SocketServerExtension
             Vector{DBUser}(), Encryptor("AES256", Toolips.gen_ref(32)), 
             Decryptor("AES256", Toolips.gen_ref(32)))
     end
-end
-
-function command!(db::DeeBee, command::DBCommand{<:Any})
-    false::Bool
 end
 
 load_schema!(db::DeeBee) = begin
@@ -249,7 +245,7 @@ verify = handler() do c::Toolips.SocketConnection
         end
         if db_key != selected_user.key
             @warn "invalid dbkey return"
-            header = "1010" * make_transaction_id() * "\n"
+            header = "1001" * make_transaction_id() * "\n"
             write!(c, "$(Char(parse(UInt8, header, base = 2)))")
             return
         end
@@ -289,9 +285,21 @@ verify = handler() do c::Toolips.SocketConnection
             continue
         end
         opcode, trans_id, cmd = (nothing, nothing, nothing)
+        arg_step = false
         try
-            opcode, trans_id, cmd = parse_db_header(query[1:2])
-        catch
+            try
+                opcode, trans_id, cmd = parse_db_header(query[1:2])
+            catch
+                optrans = bitstring(UInt8(query[1]))
+                cmd = query[3]
+                opcode = optrans[1:4]
+                trans_id = optrans[5:8]
+                arg_step = true
+            end
+        catch e
+            @warn "malformed packet recieved from $(get_ip4(c)) (continuing)"
+            @warn e
+            @warn query
             query = ""
             header = "1000" * make_transaction_id()
             write!(c, "$(Char(parse(UInt8, header, base = 2)))")
@@ -305,7 +313,11 @@ verify = handler() do c::Toolips.SocketConnection
         command = DBCommand{Symbol(cmd)}
         args = Vector{SubString{String}}()
         if length(query) > 2
-            args = split(query[3:end], "|!|")
+            if arg_step
+                args = split(query[4:end], "|!|")
+            else
+                args = split(query[3:end], "|!|")
+            end
         end
         success, output = (nothing, nothing)
         try
