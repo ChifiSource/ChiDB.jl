@@ -169,8 +169,49 @@ curr_dir = nothing
             opcode = header[1:4]
             curr_header = Char(UInt8(resp[1]))
             @test opcode == "0001"
+            @test "newt" in keys(ChiDB.DB_EXTENSION.tables)
+            @test isdir(testdb_dir * "/newt")
+        end
+        @testset "join (j)" begin
+            write!(sock, "$(curr_header)jnewt|!|main|!|Integer\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            curr_header = Char(UInt8(resp[1]))
+            @test opcode == "0001"
+            sel_tab = ChiDB.DB_EXTENSION.tables["newt"]
+            @test "main" in names(sel_tab)
+            @test sel_tab.T[1] <: Integer
+            # TODO add secondary col test + ref test
+        end
+        @testset "store (a)" begin 
+
         end
         @testset "get (g)" begin
+
+        end
+        @testset "index (i)" begin
+
+        end
+        @testset "getrow (r)" begin
+
+        end
+        @testset "type (k)" begin
+
+        end
+        @testset "rename (e)" begin
+
+        end
+        @testset "deleteat (d)" begin
+
+        end
+        @testset "delete (z)" begin
+
+        end
+        @testset "compare (p)" begin
+
+        end
+        @testset "in (n)" begin
 
         end
     end
