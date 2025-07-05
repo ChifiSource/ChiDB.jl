@@ -4,6 +4,22 @@
 
 ###### a toolips-based data-base server
 `ChiDB` is a unique data-base server designed around the `AlgebraFrames` concept and the `.ff` file format. Schema is laid using directories and filenames and data is live-read into memory. This is currently in a state of relative infancy, but is primarily being developed for my own use cases and to demonstrate the various server-building capabilities of `Toolips`.
+- [get started]()
+  - [adding chidb](#adding)
+  - [documentation](#documentation)
+- [chidb setup](#setup)
+  - [loading schema](#loading-schema)
+    - [feature files](#feature-files)
+    - [schema](#schema)
+    - [readable data-types](#readable-data-types)
+    - [editing schema](#editing-schema)
+- [querying](#querying)
+  - [command list](#commands)
+  - [query examples](#example-queries)
+- [creating chidb clients](#creating-clients)
+  - [chidb headers](#headers)
+  - [existing clients](#existing-clients)
+  - [opcode RFC](#opcodes)
 ## setup
 In order to use `ChiDB`, we first need [julia](https://julialang.org). With Julia installed, the package may be added with `Pkg`:
 ```julia
@@ -66,27 +82,73 @@ write!(sock, resp[1:1] * "l")
 ```
 ###### commands
 - `()` indicates an optional argument.
+- `(table)/column` indicates the ability to provide the column if a table is selected.
 <table>
   <tr>
-    <th>header character</th>
+    <th>character</th>
     <th>name</th>
     <th>description</th>
-    <th>standard name</th>
     <th>arguments</th>
   </tr>
   <tr>
     <td align="center">l</td>
-    <td>list</td>
+    <td align="center">list</td>
     <td>lists the columns within a table, and their types, or lists all tables when provided with no argument</td>
-    <td>list</td>
-    <td>(table)</td>
+    <td align="center">(table)</td>
   </tr>
     <tr>
     <td align="center">s</td>
     <td align="center">select</td>
-    <td>Selects a table.</td>
-    <td align="center">select</td>
+    <td align="center">Selects a table.</td>
     <td>table</td>
+  </tr>
+    <tr>
+    <td align="center">t</td>
+    <td align="center">create</td>
+    <td align="center">creates a new table</td>
+    <td>tablename</td>
+  </tr>
+      <tr>
+    <td align="center">g</td>
+    <td align="center">get</td>
+    <td align="center">gets values using vertical indexing</td>
+    <td>(table)/column (range)</td>
+  </tr>
+        <tr>
+    <td align="center">r</td>
+    <td align="center">getrow</td>
+    <td align="center">Gets a full row of data</td>
+    <td>(table)/column rown</td>
+  </tr>
+          <tr>
+    <td align="center">i</td>
+    <td align="center">index</td>
+    <td align="center">Gets the index where a certain value occurs in a given table.</td>
+    <td>(table)/column value</td>
+  </tr>
+            <tr>
+    <td align="center">a</td>
+    <td align="center">store</td>
+    <td align="center">Stores values, separated by `!;`, into a given table. Will return an argument error if the incorrect shape is provided.</td>
+    <td>(table) value!;value2</td>
+  </tr>
+              <tr>
+    <td align="center">j</td>
+    <td align="center">join</td>
+    <td align="center">Adds a new column to a frame, creates a reference column when used with a column path from another table.</td>
+    <td>(table) (reftable)/colname (Type)</td>
+  </tr>
+                <tr>
+    <td align="center">k</td>
+    <td align="center">settype</td>
+    <td align="center">Attempts to cast a given type to a provided column.</td>
+    <td>(table)/colname Type</td>
+  </tr>
+                <tr>
+    <td align="center">e</td>
+    <td align="center">rename</td>
+    <td align="center">Renames a given column or table</td>
+    <td>(table) table_or_colname</td>
   </tr>
 </table>
 
