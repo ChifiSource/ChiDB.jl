@@ -4,13 +4,12 @@
 
 ###### a toolips-based data-base server
 `ChiDB` is a unique data-base server designed around the `AlgebraFrames` concept and the `.ff` file format. Schema is laid using directories and filenames and data is live-read into memory. This is currently in a state of relative infancy, but is primarily being developed for my own use cases and to demonstrate the various server-building capabilities of `Toolips`.
-- [get started]()
+- [get started](#get-started)
   - [adding chidb](#adding)
   - [documentation](#documentation)
 - [chidb setup](#setup)
-  - [loading schema](#loading-schema)
+  - [schema](#schema)
     - [feature files](#feature-files)
-    - [schema](#schema)
     - [readable data-types](#readable-data-types)
     - [editing schema](#editing-schema)
 - [querying](#querying)
@@ -20,6 +19,13 @@
   - [chidb headers](#headers)
   - [existing clients](#existing-clients)
   - [opcode RFC](#opcodes)
+ 
+## get started
+
+#### adding
+
+#### documentation
+
 ## setup
 In order to use `ChiDB`, we first need [julia](https://julialang.org). With Julia installed, the package may be added with `Pkg`:
 ```julia
@@ -31,7 +37,7 @@ To setup a `ChiDB` server directory, run `ChiDB.start` and provide an **empty** 
 start(path::String, ip::IP4 = "127.0.0.1":8005)
 ```
 Our `admin` login will also be printed here; by querying with this new `admin` login we may create new users.
-#### loading schema
+#### schema
 Once we have a data-base server and its directory, we are going to need to create schema. There are two ways to create your schema:
 - *querying*
 - or by simply creating a filesystem.
@@ -46,12 +52,12 @@ Once we have a data-base server and its directory, we are going to need to creat
   - /table2
     - /col1.ff
 
+##### feature files
 Each `.ff` file's first line will be a readable data-type. For example, `col1.ff` from above could be
 ```ff
 Integer
 ```
-## readable data-types
-## usage
+###### readable data-types
 
 #### querying
 
