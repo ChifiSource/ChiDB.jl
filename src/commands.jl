@@ -15,17 +15,19 @@ t - create
 
 # get-store
 g - get
-r - get row
-i - get index
+r - getrow
+i - index
 a - store
+v - set
+w - setrow
 
 # column management
 j - join
-k - set type
+k - type
 e - rename
 
 # deleters
-d - delete at
+d - deleteat
 z - delete
 
 # built-in operations
@@ -250,6 +252,10 @@ function store_into!(tblname::AbstractString, selected_table::AlgebraStreamFrame
             this_table.length += 1
         end
     end
+end
+
+function perform_command!(user::DBUser, cmd::Type{DBCommand{:v}}, args::AbstractString ...)
+
 end
 
 #==

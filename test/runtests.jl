@@ -182,18 +182,103 @@ curr_dir = nothing
             sel_tab = ChiDB.DB_EXTENSION.tables["newt"]
             @test "main" in names(sel_tab)
             @test sel_tab.T[1] <: Integer
-            # TODO add secondary col test + ref test
+            
+            write!(sock, "$(curr_header)jnewt|!|name|!|String\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            curr_header = Char(UInt8(resp[1]))
+            @test opcode == "0001"
+            @test "name" in names(sel_tab)
+            # ref col join
+            write!(sock, "$(curr_header)jnewt|!|tab1/col1\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            curr_header = Char(UInt8(resp[1]))
+            @test opcode == "0001"
+            @test "col1" in names(sel_tab)
+            @test length(names(sel_tab)) == 3
+            @test length(keys(sel_tab.paths)) == 2
+            @test isfile(testdb_dir * "/newt/tab1_col1.ref")
         end
         @testset "store (a)" begin 
-
+            write!(sock, "$(curr_header)anewt|!|6!;sample!;1\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            curr_header = Char(UInt8(resp[1]))
+            @test opcode == "0001"
+            @test length(ChiDB.DB_EXTENSION.tables["newt"]) > 0
+            @test "sample" in ChiDB.DB_EXTENSION.tables["newt"]["name"]
+            
+            write!(sock, "$(curr_header)anewt|!|12!;sample2!;7\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            curr_header = Char(UInt8(resp[1]))
+            @test opcode == "0001"
+            @test length(ChiDB.DB_EXTENSION.tables["newt"]) > 0
+            @test "sample" in ChiDB.DB_EXTENSION.tables["newt"]["name"]
         end
         @testset "get (g)" begin
+            write!(sock, "$(curr_header)gnewt/name\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            curr_header = Char(UInt8(resp[1]))
+            @test opcode == "0001"
+            vals = resp[2:end]
+            @test contains(vals, "!;")
+            splts = filter!(x -> x == "", split(vals, "!;"))
+            @test length(splts) == 2
+            @test "sample" in splts
+            @test "sample2" in splts
 
+            write!(sock, "$(curr_header)gnewt/main|!|1:2\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            curr_header = Char(UInt8(resp[1]))
+            @test opcode == "0001"
+            @test contains(vals, "!;")
+            vals = resp[2:end]
+            splts = filter!(x -> x == "", split(vals, "!;"))
+            for x in splts
+                successful_parse = try
+                    parse(Int64, replace(x, " " => "", "\n" => ""))
+                    true
+                catch
+                    false
+                end
+                @test successful_parse
+            end
         end
         @testset "index (i)" begin
-
+            write!(sock, "$(curr_header)inewt/name|!|sample\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            curr_header = Char(UInt8(resp[1]))
+            @test opcode == "0001"
+            val = replace(resp[2:end], "\n" => "")
+            i = nothing
+            successful_index_parse = try
+                i = parse(resp, Int64)
+                true
+            catch
+                false
+            end
+            @test successful_index_parse
+            @test i == 1
         end
         @testset "getrow (r)" begin
+
+        end
+        @testset "set (v)" begin
+
+        end
+        @testset "setrow (w)" begin
 
         end
         @testset "type (k)" begin
@@ -214,9 +299,6 @@ curr_dir = nothing
         @testset "in (n)" begin
 
         end
-    end
-    @testset "query commands" verbose = true begin
-
     end
     @testset "broken queries" verbose = true begin
 
