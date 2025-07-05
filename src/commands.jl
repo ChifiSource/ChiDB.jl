@@ -151,12 +151,10 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:g}}, args::Abstract
             end
         end
         generated = DB_EXTENSION.tables[string(table_selected)][string(col_selected)]
-        return(0, join((string(gen) for gen in generated[selected_ind]), ";"))
+        return(0, join((string(gen) for gen in generated[selected_ind]), "!;"))
     end
-    @warn table_selected
-    @warn col_selected
     generated = DB_EXTENSION.tables[string(table_selected)][string(col_selected)]
-    return(0, join((string(gen) for gen in generated), ";"))
+    return(0, join((string(gen) for gen in generated), "!;"))
 end
 # get row
 function perform_command!(user::DBUser, cmd::Type{DBCommand{:r}}, args::AbstractString ...)
@@ -229,7 +227,7 @@ function store_into!(tblname::AbstractString, selected_table::AlgebraStreamFrame
         colname = selected_table.names[cole]
         if ~(colname in table_paths)
             # reftables
-            push!(refwrites, colname => writevals[e])
+            push!(refwrites, colname => writevals[cole])
             continue
         end
         open(selected_table.paths[colname], "a") do o::IOStream
@@ -275,21 +273,27 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:j}}, args::Abstract
             colname = string(splts[2])
             table = string(splts[1])
         else
-            if user.table == ""
-                return(2, "no table selected to join to")
-            end
-            table = user.table
-            colname = args[1]
+            table = string(args[1])
         end
         T = args[2]
         # reference join?
         if contains(args[2], "/")
-            touch(DB_EXTENSION.dir * "/$table/" * "$(args[2]).ref")
+            newn = replace(args[2], "/" => "_")
+            @warn "DIR::::"
+            @warn DB_EXTENSION.dir * "/$table/" * "$(newn).ref"
+            @warn table
+            @warn colname
+            touch(DB_EXTENSION.dir * "/$table/" * "$(newn).ref")
             nm_splits = split(args[2], "/")
             reftable = string(nm_splits[1]) 
             refcol = string(nm_splits[2])
-            join!(DB_EXTENSION.tables[table], string(colname) => T) do e
-                db.tables[reftable][refcol][e]
+            reftab = DB_EXTENSION.tables[reftable]
+            @info refcol
+            @info reftab.names
+            axis = findfirst(n -> n == refcol, reftab.names)
+            T = reftab.T[axis]
+            join!(DB_EXTENSION.tables[table], string(refcol) => T) do e
+                DB_EXTENSION.tables[reftable][refcol][e]
             end
             return(0, "")
         end

@@ -1,237 +1,306 @@
-using AlgebraFrames
+using ChiDB
+using ChiDB.Toolips
 using Test
+SRCDIR = @__DIR__
+const ext = ChiDB.DB_EXTENSION
+#==
+testdb info
+dbkey:
+hjqyoktipaporlrzepcdaouwtysqtjch
+pwd:
+wztycvtmqqkqjrba
+username:
+admin
+==#
+testdb_dir = SRCDIR * "/testdb"
+curr_dir = readdir(testdb_dir)
+if length(curr_dir) > 4
+    @info "found bad files in db, cleaning"
+    necessary = ("db", "tab1", "tab3", "vals")
+    for dir in curr_dir
+        if dir in necessary
+            continue
+        end
+        rm(testdb_dir * "/" * dir, force = true, recursive = true)
+    end
+end
 
-@testset "algebraframes !" verbose = true begin
-   @testset "Algebra" verbose = true begin
-      alg = nothing
-      @testset "algebra constructors" begin
-         alg = Algebra{Int64, 1}()
-         @test alg.length == 1
-         @test typeof(alg) == AlgebraVector{Int64}
-         alg2 = Algebra(generate(alg))
-         @test typeof(alg2) == AlgebraVector{Int64}
-         @test [alg2] == [alg]
-         alg = algebra(Int64, (5, 5)) do e
-            1
-         end
-         @test alg[1] == 1
-         @test typeof(alg).parameters[2] == 5
-      end
-      @testset "getters" begin
-         @test length(alg) == 5
-         @test size(alg) == (5, 5)
-      end
-      @testset "algebra" begin
-         algebra!(alg) do values
-            values[1] = 25
-            values[2] = 10
-            values[5] = 10
-         end
-         @test length(alg.pipe) > 1
-         @test alg[1] == 25
-         @test alg[5] == 10
-         @test alg[1:2] == [25, 10]
-         @test [alg][1] == 25
-         deleteat!(alg, 1)
-         @test length(alg) == 4
-         multidim = algebra(Int64, (5, 5)) do e
-            e
-         end
-         @test multidim[1] == 1
-      end
-      insta_gen = nothing
-      @testset "generation" begin
-         af = Algebra([5, 6, 7, 8])
-         @test af[1] == 5
-         @test af[1:3] == [5, 6, 7]
-         @test af[4] == 8
-         algebra!(af) do vec
-            vec[1] += 5
-         end
-         @test af[1] == 10
-         insta_gen = algebra(String, 10) do 
-            ["p" for x in 1:10]
-         end
-         @test [insta_gen] == ["p" for x in 1:10]
-         set_generator!(insta_gen) do e
-            e
-         end
-         @test insta_gen[1] == 1
-         @test insta_gen[2] == 2
-         @test generate(insta_gen) == [e for e in 1:10]
-         multidim = algebra(Int64, (5, 5)) do e
-            e
-         end
-         @test length(eachrow(multidim)) == 5
-         cols = eachcol(multidim)
-         @test length(cols) == 5
-         @test cols[1][1] == 1
-         @test hcat(cols ...) == [multidim]
-      end
-      @testset "API" begin
-         multidim = algebra(Int64, (5, 5)) do e
-            e
-         end
-         @test size(multidim) == (5, 5)
-         cop = copy(insta_gen)
-         @test cop.offsets == insta_gen.offsets
-         @test cop.length == insta_gen.length
-         @test [cop] == [insta_gen]
-         one = algebra(Int64, 5)
-         two = algebra(Int64, 5)
-         @test length(vcat(one, two)) == 10
-         @test typeof(hcat(one, two)).parameters[2] == 2
-         mydim = algebra(Int64, (2, 5))
-         @test size(mydim) == (2, 5)
-         r = reshape(mydim, 5, 2)
-         @test length(eachcol(r)) == 2
-      end
-   end
-   @testset "Algebra Frames" verbose = true begin
-      af = algebra(15, "A" => Int64, "B" => String)
-      @testset "constructors" begin
-         trans = AlgebraFrames.Transform(Vector{Int16}(), print)
-         @test typeof(trans) == AlgebraFrames.Transform
-         @test length(af) == 15
-         @test length(af.names) == 2
-         @test "A" in af.names
-      end
-      @testset "getters" begin
-         @test length(names(af)) == 2
-         @test length(af) == 15
-         @test size(af) == (15, 2)
-      end
-      @testset "algebra" begin
-         algebra!(af) do f::Frame
-            f["A", 1] = 5
-         end
-         @test af["A"][1] == 5
-         @test length(af["A"]) == length(af)
-         gen = generate(af)
-         @test gen["A"] == af["A"]
-         @test gen["B"] == af["B"]
-         @test typeof(gen["B"][1]) <: AbstractString
-      end
-      @testset "transformations" begin
-         algebra!(af) do f::Frame
-            f["A", 1:5] = [1, 2, 3, 4, 5]
-            f["B", 1] = "now"
-            @test f["A", 1] == 1
-            @test f["A", 1:5][1:5] == [1, 2, 3, 4, 5]
-         end
-         gen = generate(af)
-         @test gen["A"][1:5] == [1, 2, 3, 4, 5]
-         @test gen["A", 1:5][1:5] == [1, 2, 3, 4, 5]
-         @test gen["B"][1] == "now"
-      end
-      @testset "generation" begin
-         dct = Dict(af)
-         @test length(keys(dct)) == 2
-         @test length(first(dct)[2]) == 15
-         for x in framerows(af)
-            @test "B" in x.names
-            @test length(x.values) == 2
-            @test x["A"] in [1, 2, 3, 4, 5, 0]
-         end
-         for y in eachcol(af)
-            @test length(y) == af.length
-         end
-         NLEN = length(af.names)
-         for y in eachrow(af)
-            @test length(y) == NLEN
-         end
-         @test length(pairs(af)) == length(af.names)
-         gen = generate(af)
-         @test length(gen.names) == length(af.names)
-         @test length(gen.values[1]) == af.length
-      end
-      af = algebra(15, "A" => Int64, "B" => String)
-      @testset "API" begin
-         # Af api
-         af2 = algebra(5, "A" => Int64, "B" => String)
-         combided = merge(af, af2)
-         @test length(combided) == length(af) + length(af2)
-         @test length(generate(combided)) == length(af) + length(af2)
-         join!(af, "C" => Int64) do e
-            e
-         end
-         @test size(af) == (length(af), 3)
-         @test length(names(af)) == 3
-         @test length(names(combided)) == 3
-         @test "C" in names(af)
-         drop!(af, "A")
-         @test length(names(af)) == 2
-         @test ~("A" in names(af))
-         gen = generate(af)
-         @test "C" in names(gen)
-         @test ~("A" in names(gen))
-         @test length(names(gen)) == 2
-         @test "B" in names(gen)
-         gen = generate(af2)
-         newcol = algebra(combided.length, "W" => Float64, "Y" => Int64)
-         joined = join(combided, newcol)
-         for x in ("W", "Y")
-            @test x in names(joined)
-            @test ~(x in names(combided))
-         end
-         join!(combided, newcol)
-         for x in ("W", "B", "C", "Y")
-            @test x in names(combided)
-         end
-         # f api
-         # (merge, size, length, join, join!, names, etc...)
-         @test size(gen) == size(af2)
-         @test gen["B", 1:3][1:3] == ["null", "null", "null"]
-         @test length(gen) == length(af2)
-         @test length(names(gen)) == 2
-         # replace!
-         af = algebra(20, "A" => Int64, "B" => String)
-         algebra!(af) do f::Frame
-            replace!(f, "null", "n")
-         end
-         @test af["B"][2] == "n"
-         join!(af, "C" => Int64)
-         algebra!(af) do f::Frame
-            replace!(f, "A", 0, 5)
-         end
-         gen = generate(af)
-         @test ~(0 in gen["A"])
-         @test 0 in gen["C"]
-         mergef = merge(generate(af), generate(af))
-         @test length(mergef) == length(af) * 2
-         # cast!
-         cast!(af, "A", Float64)
-         @test Float64 in af.T
-         @test typeof(af["A"]) == Vector{Float64}
-         testgen = generate(af)
-         cast!(testgen, "A", Float64)
-         @test typeof(testgen["A", 1]) == Float64
-         # filter!
-         newf = algebra(5, "A" => Int64, "B" => String)
-         set_generator!(newf, "A") do e
-            [5, 6, 22, 33, 8][e]
-         end
-         algebra!(newf) do frame::Frame
-            filter!(frame) do row::FrameRow
-               row["A"] > 22
+curr_dir = nothing
+
+@testset "chifi database server" verbose = true begin 
+    @testset "load db and schema" begin
+        ext.dir = testdb_dir
+        successful_load = try 
+            ChiDB.load_db!(ext)
+            true
+        catch e
+            throw(e)
+            false
+        end
+        @test successful_load
+        found = findfirst(user -> user.username == "admin", ext.cursors)
+        @test ~(isnothing(found))
+        successful_schema_load = try
+            ChiDB.load_schema!(ext)
+            true
+        catch
+            false
+        end
+        @test successful_schema_load
+        @test length(ext.tables) == 3
+        table_names = keys(ext.tables)
+        for x in ["tab1", "vals", "tab3"]
+            # one table shall remain empty, to ensure that works
+            @test x in table_names
+        end
+        @test "col1" in ext.tables["tab1"].names
+        @test typeof(ext.tables["tab1"]["col1"][1]) == Int64
+    end
+    @testset "internal functions" begin
+        dbuser = ext.cursors[1]
+        tab = "tab1/col1"
+        sel, col = ChiDB.get_selected_col(dbuser, tab)
+        @test sel == "tab1"
+        @test col == "col1"
+        # error
+        sel, col = ChiDB.get_selected_col(dbuser, "col1")
+        @test typeof(sel) == Int64
+        dbuser.table = "tab1"
+        sel, col = ChiDB.get_selected_col(dbuser, "col1")
+        @test sel == "tab1"
+        @test col == "col1"
+        dbuser.table = ""
+    end
+    sock = nothing
+    @testset "server start" begin
+        @info "starting dbserver"
+        procs = ChiDB.start(testdb_dir, async = true)
+        @test typeof(procs) == ChiDB.Toolips.ProcessManager
+        server_ns = names(ChiDB, all = true)
+        @test :server in server_ns
+        # reset tables check
+        @test length(ext.tables) == 3
+        @test length(ext.cursors) == 1
+        connected = try
+            sock = ChiDB.Toolips.connect("127.0.0.1":8005)
+            true
+        catch
+            false
+        end
+        @test connected
+    end
+    curr_header = 'c'
+    @testset "login" begin
+        @info "performing login"
+        # success   
+        write!(sock, "aShjqyoktipaporlrzepcdaouwtysqtjch admin wztycvtmqqkqjrba\n")
+        @warn "completed write"
+        resp = String(readavailable(sock))
+        @warn "completed read"
+        header = bitstring(UInt8(resp[1]))
+        opcode = header[1:4]
+        @test opcode == "0001"
+        @test ChiDB.DB_EXTENSION.cursors[1].transaction_id != ""
+        curr_header = Char(UInt8(resp[1]))
+        #==
+        # dbkey error
+        sock2 = ChiDB.Toolips.connect("127.0.0.1":8005)
+        write!(sock2, "aShjqyoktipaporlrzepcdaouwtyseragargch admin wztycvtmqqkqjrba\n")
+        resp = String(readavailable(sock2))
+        header = bitstring(UInt8(resp[1]))
+        opcode = header[1:4]
+        @test opcode == "1010"
+        # login error
+        sock2 = ChiDB.Toolips.connect("127.0.0.1":8005)
+        write!(sock2, "aShjqyoktipaporlrzepcdaouwtysqtjch admin wztychgterehjrba\n")
+        resp = String(readavailable(sock))
+        header = bitstring(UInt8(resp[1]))
+        opcode = header[1:4]
+        @test opcode == "1100"
+        ==#
+    end
+    @testset "queries" verbose = true begin
+        @info "performing queries"
+        @testset "command error" begin
+
+        end
+        @testset "list (l)" begin
+            write!(sock, "$(curr_header)l\n")
+            resp = String(readavailable(sock))
+            @test contains(resp, "tab1")
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            @test opcode == "0001"
+            write!(sock, "$(Char(UInt8(resp[1])))ltab1\n")
+            resp = String(readavailable(sock))
+            @test contains(resp, "col1")
+            curr_header = Char(UInt8(resp[1]))
+            # argument error
+            write!(sock, "$(curr_header)lbabtaejthgejth\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            @test opcode == "1010"
+            curr_header = Char(UInt8(resp[1]))
+        end
+        @testset "select (s)" begin
+            @warn "$(curr_header)stab1\n"
+            write!(sock, "$(curr_header)stab1\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            curr_header = Char(UInt8(resp[1]))
+            @test opcode == "0001"
+            if opcode != "0001"
+                @warn resp
             end
-         end
-         @test length(generate(newf)) < 5
-         found = findfirst(x -> x < 22, generate(newf)["A"])
-         @test isnothing(found)
-         # drop! + deleteat!
-         drop!(gen, "A")
-         @test ~("A" in names(gen))
-         # frame rows/pairs/eachcol/eachrow
-         for row in framerows(gen)
-            @test "C" in names(row)
-            break
-         end
-         @test length(eachcol(gen)) == 2
-         @test length(pairs(gen)) == 2
-         @test "C" in keys(Dict(pairs(gen) ...))
-         @test length(eachrow(gen)) == length(gen)
-         @test length(gen) == length(af)
-      end
-   end
+            @test ChiDB.DB_EXTENSION.cursors[1].table == "tab1"
+            write!(sock, "$(curr_header)sthrhtrhth\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            curr_header = Char(UInt8(resp[1]))
+            @test opcode == "1010"
+        end
+        @testset "create (t)" begin
+            write!(sock, "$(curr_header)tnewt\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            curr_header = Char(UInt8(resp[1]))
+            @test opcode == "0001"
+            @test "newt" in keys(ChiDB.DB_EXTENSION.tables)
+            @test isdir(testdb_dir * "/newt")
+        end
+        @testset "join (j)" begin
+            write!(sock, "$(curr_header)jnewt|!|main|!|Integer\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            curr_header = Char(UInt8(resp[1]))
+            @test opcode == "0001"
+            sel_tab = ChiDB.DB_EXTENSION.tables["newt"]
+            @test "main" in names(sel_tab)
+            @test sel_tab.T[1] <: Integer
+            
+            write!(sock, "$(curr_header)jnewt|!|name|!|String\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            curr_header = Char(UInt8(resp[1]))
+            @test opcode == "0001"
+            @test "name" in names(sel_tab)
+            # ref col join
+            write!(sock, "$(curr_header)jnewt|!|tab1/col1\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            curr_header = Char(UInt8(resp[1]))
+            @test opcode == "0001"
+            @test "col1" in names(sel_tab)
+            @test length(names(sel_tab)) == 3
+            @test length(keys(sel_tab.paths)) == 2
+            @test isfile(testdb_dir * "/newt/tab1_col1.ref")
+        end
+        @testset "store (a)" begin 
+            write!(sock, "$(curr_header)anewt|!|6!;sample!;1\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            curr_header = Char(UInt8(resp[1]))
+            @test opcode == "0001"
+            @test length(ChiDB.DB_EXTENSION.tables["newt"]) > 0
+            @test "sample" in ChiDB.DB_EXTENSION.tables["newt"]["name"]
+            
+            write!(sock, "$(curr_header)anewt|!|12!;sample2!;7\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            curr_header = Char(UInt8(resp[1]))
+            @test opcode == "0001"
+            @test length(ChiDB.DB_EXTENSION.tables["newt"]) > 0
+            @test "sample" in ChiDB.DB_EXTENSION.tables["newt"]["name"]
+        end
+        @testset "get (g)" begin
+            write!(sock, "$(curr_header)gnewt/name\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            curr_header = Char(UInt8(resp[1]))
+            @test opcode == "0001"
+            vals = resp[2:end]
+            @test contains(vals, "!;")
+            splts = filter!(x -> x == "", split(vals, "!;"))
+            @test length(splts) == 2
+            @test "sample" in splts
+            @test "sample2" in splts
+
+            write!(sock, "$(curr_header)gnewt/main|!|1:2\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            curr_header = Char(UInt8(resp[1]))
+            @test opcode == "0001"
+            @test contains(vals, "!;")
+            vals = resp[2:end]
+            splts = filter!(x -> x == "", split(vals, "!;"))
+            for x in splts
+                successful_parse = try
+                    parse(Int64, replace(x, " " => "", "\n" => ""))
+                    true
+                catch
+                    false
+                end
+                @test successful_parse
+            end
+        end
+        @testset "index (i)" begin
+            write!(sock, "$(curr_header)inewt/name|!|sample\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            curr_header = Char(UInt8(resp[1]))
+            @test opcode == "0001"
+            val = replace(resp[2:end], "\n" => "")
+            i = nothing
+            successful_index_parse = try
+                i = parse(resp, Int64)
+                true
+            catch
+                false
+            end
+            @test successful_index_parse
+            @test i == 1
+        end
+        @testset "getrow (r)" begin
+
+        end
+        @testset "set (v)" begin
+
+        end
+        @testset "setrow (w)" begin
+
+        end
+        @testset "type (k)" begin
+
+        end
+        @testset "rename (e)" begin
+
+        end
+        @testset "deleteat (d)" begin
+
+        end
+        @testset "delete (z)" begin
+
+        end
+        @testset "compare (p)" begin
+
+        end
+        @testset "in (n)" begin
+
+        end
+    end
+    @testset "broken queries" verbose = true begin
+
+    end
 end

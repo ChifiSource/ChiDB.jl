@@ -324,8 +324,15 @@ verify = handler() do c::Toolips.SocketConnection
             success, output = perform_command!(selected_user, command, args ...)
         catch e
             query = ""
-            @warn e
-            throw(e)
+            io = IOBuffer()
+            showerror(io, e)
+            msg = String(take!(io))
+            @warn "Caught Exception" exception_type=typeof(e) message=msg
+            	@warn "Stacktrace:"
+	        for (i, frame) in enumerate(stacktrace(catch_backtrace()))
+		        @warn "$i: $frame"
+	        end
+            @sync throw(e)
             yield()
             continue
         end
