@@ -203,12 +203,48 @@ write!(sock, resp[1:1] * "l")
     <th align="center">built-in operations</th>
     <th></th>
                 <tr>
+                                  <tr>
+    <td align="center">p</td>
+    <td align="center">compare</td>
+    <td align="center">Checks if the provided value is the same as the stored data.</td>
+    <td>(table)/column rown value</td>
+  </tr>
+                                    <tr>
+    <td align="center">n</td>
+    <td align="center">in</td>
+    <td align="center">Checks if the provided value is within the column.</td>
+    <td>(table)/column value</td>
+  </tr>
                                 <tr>
     <th align="center"></th>
     <th align="center"></th>
     <th align="center">server</th>
     <th></th>
                 <tr>
+                                                    <tr>
+    <td align="center">U</td>
+    <td align="center">users</td>
+    <td align="center">Lists current users.</td>
+    <td></td>
+  </tr>
+      <tr>
+    <td align="center">C</td>
+    <td align="center">newuser</td>
+    <td align="center">Creates a new user. Will return the new name, password, and dbkey.</td>
+    <td>user (pwd)</td>
+  </tr>
+                                                      <tr>
+    <td align="center">K</td>
+    <td align="center">setuser</td>
+    <td align="center">Sets any users login -- requires username to be admin.</td>
+    <td>user, name (pwd)</td>
+  </tr>
+                                                      <tr>
+    <td align="center">L</td>
+    <td align="center">logout</td>
+    <td align="center">Disconnects from the server.</td>
+    <td></td>
+  </tr>
 </table>
 
 ###### opcodes
