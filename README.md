@@ -100,7 +100,7 @@ write!(sock, resp[1:1] * "l")
     <td align="center">l</td>
     <td align="center">list</td>
     <td>lists the columns within a table, and their types, or lists all tables when provided with no argument</td>
-    <td align="center">(table)</td>
+    <td>(table)</td>
   </tr>
     <tr>
     <td align="center">s</td>
@@ -113,6 +113,12 @@ write!(sock, resp[1:1] * "l")
     <td align="center">create</td>
     <td align="center">creates a new table</td>
     <td>tablename</td>
+  </tr>
+    <tr>
+      <th>
+      <th>
+    <th align="center">get-store commands</th>
+      <th></th>
   </tr>
       <tr>
     <td align="center">g</td>
@@ -138,6 +144,24 @@ write!(sock, resp[1:1] * "l")
     <td align="center">Stores values, separated by `!;`, into a given table. Will return an argument error if the incorrect shape is provided.</td>
     <td>(table) value!;value2</td>
   </tr>
+            <tr>
+    <td align="center">v</td>
+    <td align="center">set</td>
+    <td align="center">Sets a singular value in a table.</td>
+    <td>(table)/column row value</td>
+  </tr>
+              <tr>
+    <td align="center">w</td>
+    <td align="center">setrow</td>
+    <td align="center">Sets the values of an entire row on a table</td>
+    <td>(table) row value1!;value2</td>
+  </tr>
+            <tr>
+    <th align="center"></th>
+    <th align="center"></th>
+    <th align="center">column management</th>
+    <th></th>
+  </tr>
               <tr>
     <td align="center">j</td>
     <td align="center">join</td>
@@ -146,7 +170,7 @@ write!(sock, resp[1:1] * "l")
   </tr>
                 <tr>
     <td align="center">k</td>
-    <td align="center">settype</td>
+    <td align="center">type</td>
     <td align="center">Attempts to cast a given type to a provided column.</td>
     <td>(table)/colname Type</td>
   </tr>
@@ -156,6 +180,35 @@ write!(sock, resp[1:1] * "l")
     <td align="center">Renames a given column or table</td>
     <td>(table) table_or_colname</td>
   </tr>
+              <tr>
+    <th align="center"></th>
+    <th align="center"></th>
+    <th align="center">deleters</th>
+    <th></th>
+                <tr>
+    <td align="center">d</td>
+    <td align="center">deleteat</td>
+    <td align="center">Deletes a row from a given table.</td>
+    <td>(table) row</td>
+  </tr>
+                  <tr>
+    <td align="center">z</td>
+    <td align="center">delete</td>
+    <td align="center">Deletes a table</td>
+    <td>table</td>
+  </tr>
+                <tr>
+    <th align="center"></th>
+    <th align="center"></th>
+    <th align="center">built-in operations</th>
+    <th></th>
+                <tr>
+                                <tr>
+    <th align="center"></th>
+    <th align="center"></th>
+    <th align="center">server</th>
+    <th></th>
+                <tr>
 </table>
 
 ###### opcodes
@@ -199,7 +252,7 @@ write!(sock, resp[1:1] * "l")
     <td align="center">false</td>
   </tr>
         <tr>
-    <td align="center">1010</td>
+    <td align="center">1001</td>
     <td align="center"><b>ERROR</b></td>
     <td align="center">bad dbkey (connection closed)</td>
     <td align="center">false</td>
