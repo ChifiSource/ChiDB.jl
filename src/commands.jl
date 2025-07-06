@@ -255,9 +255,49 @@ function store_into!(tblname::AbstractString, selected_table::AlgebraStreamFrame
         end
     end
 end
-
+# set
 function perform_command!(user::DBUser, cmd::Type{DBCommand{:v}}, args::AbstractString ...)
-
+    table, col = get_selected_col(user, args[1])
+    if typeof(table) <: Integer
+        return(table, col)
+    end
+    if length(args) != 3
+        return(2, "set requires a table/column (1), row (2), and value (3)")
+    end
+    rown = 0
+    try
+        rown = parse(Int64, args[2])
+    catch
+        return(2, "failed to parse row: $(args[2])")
+    end
+    sel_tab = DB_EXTENSION.tables[table]
+    path = if ~(col in keys(sel_tab.paths))
+        direc = readdir(DB_EXTENSION.dir * "/$table")
+        refname = findfirst(x -> contains(x, "$col.ref"), direc)
+        ref_table = DB_EXTENSION.refinfo[col]
+        ref_tablen = split(direc[refname], "_")[1]
+        ref_table = DB_EXTENSION.tables[ref_tablen]
+        ref_table.paths[col]
+    else
+        sel_tab.paths[col]
+    end
+    all_lines = readlines(path)
+    if length(all_lines) <= rown
+        return(2, "index error; index $(rown) on $(length(all_lines))")
+    end
+    all_lines[rown + 1] = args[3]
+    open(path, "w") do o::IOStream
+        write(o, join(all_lines, "\n"))
+    end
+    return(0, "value updated")
+end
+# set row
+function perform_command!(user::DBUser, cmd::Type{DBCommand{:w}}, args::AbstractString ...)
+    table, col = get_selected_col(user, args[1])
+    if typeof(table) <: Integer
+        return(table, col)
+    end
+    rown = parse(Int64, args[2])
 end
 
 #==

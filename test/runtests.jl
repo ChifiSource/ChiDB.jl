@@ -307,7 +307,14 @@ curr_dir = nothing
             @test split(rows[2], "!;")[2] == "sample2"
         end
         @testset "set (v)" begin
-
+            write!(sock, "$(curr_header)vnewt/name|!|1|!|frank\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            curr_header = Char(UInt8(resp[1]))
+            @test opcode == "0001"
+            @test contains(resp, "value updated")
+            @test ChiDB.DB_EXTENSION.tables["newt"]["name"][1] == "frank"
         end
         @testset "setrow (w)" begin
 
