@@ -293,11 +293,50 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:v}}, args::Abstract
 end
 # set row
 function perform_command!(user::DBUser, cmd::Type{DBCommand{:w}}, args::AbstractString ...)
-    table, col = get_selected_col(user, args[1])
-    if typeof(table) <: Integer
-        return(table, col)
+    n = length(args)
+    inp = ""
+    table, rown = if n == 2
+        table = user.table
+        if user.table == ""
+            return(2, "only row and values provided, and no table selected.")
+        end
+        rown = try
+            parse(args[1], Int64)
+        catch
+            return(2, "failed to parse row: $(args[1])")
+        end
+        inp = args[2]
+        (table, rown)
+    elseif n == 3
+        table = args[1]
+        rown = try
+            parse(Int64, args[2])
+        catch
+            return(2, "failed to parse row: $(args[2])")
+        end
+        inp = args[3]
+        (table, rown)
+    else
+        return(2, "set row takes three arguments, or two with a table selected.")
     end
-    rown = parse(Int64, args[2])
+    sel_table = DB_EXTENSION.tables[tables]
+    if rown > length(sel_table)
+        return(2, "row requested is greater than length of table ($(length(sel_table)))")
+    end
+    n = length(sel_table.names)
+    valsplts = split(inp, "!;")
+    if ~(length(valsplits) == n)
+        return(2, "not enough values provided for each row")
+    end
+    path_keys = keys(sel_table.paths)
+    for e in 1:n
+        colname = sel_table.names[e]
+        if ~(colname in path_keys)
+            # ref table
+        else
+
+        end
+    end
 end
 
 #==
