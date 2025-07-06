@@ -224,13 +224,15 @@ curr_dir = nothing
         @testset "get (g)" begin
             write!(sock, "$(curr_header)gnewt/name\n")
             resp = String(readavailable(sock))
+            @info "GET RESP: " * resp
             header = bitstring(UInt8(resp[1]))
             opcode = header[1:4]
             curr_header = Char(UInt8(resp[1]))
             @test opcode == "0001"
-            vals = resp[2:end]
+            vals = replace(resp[3:end], "\n" => "")
+            @info vals
             @test contains(vals, "!;")
-            splts = filter!(x -> x == "", split(vals, "!;"))
+            splts = filter!(x -> x != "", split(vals, "!;"))
             @test length(splts) == 2
             @test "sample" in splts
             @test "sample2" in splts
@@ -242,7 +244,7 @@ curr_dir = nothing
             curr_header = Char(UInt8(resp[1]))
             @test opcode == "0001"
             @test contains(vals, "!;")
-            vals = resp[2:end]
+            vals = resp[3:end]
             splts = filter!(x -> x == "", split(vals, "!;"))
             for x in splts
                 successful_parse = try
@@ -261,19 +263,47 @@ curr_dir = nothing
             opcode = header[1:4]
             curr_header = Char(UInt8(resp[1]))
             @test opcode == "0001"
-            val = replace(resp[2:end], "\n" => "")
+            val = replace(resp[3:end], "\n" => "")
             i = nothing
             successful_index_parse = try
-                i = parse(resp, Int64)
+                i = parse(Int64, val)
                 true
             catch
+                @warn val
                 false
             end
             @test successful_index_parse
             @test i == 1
         end
         @testset "getrow (r)" begin
+            write!(sock, "$(curr_header)rnewt|!|1\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            curr_header = Char(UInt8(resp[1]))
+            @test opcode == "0001"
+            vals = split(replace(resp[3:end], "\n" => ""), "!;")
+            @test length(vals) == 3
+            @test vals[2] == "sample"
+            successful_parse = try
+                parse(Int64, vals[3])
+                true
+            catch
+                false
+            end
+            @test successful_parse
 
+            # get multirow
+            write!(sock, "$(curr_header)rnewt|!|1:2\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            curr_header = Char(UInt8(resp[1]))
+            rows = split(replace(resp[3:end], "\n" => ""), "!N")
+            @warn rows
+            @test length(rows) == 2
+            @test length(split(rows[1], "!;")) == 3
+            @test split(rows[2], "!;")[2] == "sample2"
         end
         @testset "set (v)" begin
 
