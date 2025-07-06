@@ -172,14 +172,18 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:r}}, args::Abstract
     end
     if contains(ind, ":")
         parts = split(ind, ":")
-        ind = parse(Int64, ind[1]):parse(Int64, ind[2])
+        ind = parse(Int64, parts[1]):parse(Int64, parts[2])
     else
         ind = parse(Int64, args[2])
     end
-    gen = DB_EXTENSION.tables[table_selected]
+    gen = generate(DB_EXTENSION.tables[table_selected])
+    rows = AlgebraStreamFrames.framerows(gen)[ind]
+    if typeof(ind) == Int64
+        rows = [rows]
+    end
     result = join((begin
-        join((string(val) for val in row.values), "!;")
-    end for row in eachrow(gen)[ind]), "\n")
+            join((string(val) for val in row.values), "!;")
+        end for row in rows), "!N")
     return(0, result)
 end
 # get index
