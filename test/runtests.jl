@@ -299,6 +299,7 @@ curr_dir = nothing
             header = bitstring(UInt8(resp[1]))
             opcode = header[1:4]
             curr_header = Char(UInt8(resp[1]))
+            @test opcode == "0001"
             rows = split(replace(resp[3:end], "\n" => ""), "!N")
             @warn rows
             @test length(rows) == 2
@@ -327,7 +328,21 @@ curr_dir = nothing
 
         end
         @testset "in (n)" begin
+            write!(sock, "$(curr_header)nnewt/name|!|sample2\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            curr_header = Char(UInt8(resp[1]))
+            @test opcode == "0001"
+            @test contains(resp[3:end], "1")
 
+            write!(sock, "$(curr_header)nnewt/name|!|great\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            curr_header = Char(UInt8(resp[1]))
+            @test opcode == "0001"
+            @test contains(resp[3:end], "0")
         end
     end
     @testset "broken queries" verbose = true begin

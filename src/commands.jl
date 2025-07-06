@@ -442,7 +442,7 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:z}}, args::Abstract
 end
 # compare
 function perform_command!(user::DBUser, cmd::Type{DBCommand{:p}}, args::AbstractString ...)
-    table, col = get_selected_col(user, cmd)
+    table, col = get_selected_col(user, args[1])
     if typeof(table) == Int64
         return(table, col)
     end
@@ -462,7 +462,7 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:n}}, args::Abstract
     if length(args) != 2
         return(2, "in takes a (table)/column and a value")
     end
-    table, col = get_selected_col(user, cmd)
+    table, col = get_selected_col(user, args[1])
     if typeof(table) == Int64
         return(table, col)
     end
