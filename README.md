@@ -13,12 +13,15 @@
     - [readable data-types](#readable-data-types)
     - [editing schema](#editing-schema)
 - [querying](#querying)
+  - [clients](#clients)
   - [command list](#commands)
   - [query examples](#example-queries)
 - [creating chidb clients](#creating-clients)
-  - [chidb headers](#headers)
   - [existing clients](#existing-clients)
-  - [opcode RFC](#opcodes)
+  - [chidb headers](#headers)
+    - [header RFC](#opcodes)
+
+  
  
 ## get started
 
@@ -38,9 +41,9 @@ start(path::String, ip::IP4 = "127.0.0.1":8005)
 ```
 Our `admin` login will also be printed here; by querying with this new `admin` login we may create new users.
 #### schema
-Once we have a data-base server and its directory, we are going to need to create schema. There are two ways to create your schema:
+`ChiDB` schema is created using two different techniques:
 - *querying*
-- or by simply creating a filesystem.
+- or by creating a filesystem of `.ff` and `.ref` files.
 
 `ChiDB`'s internal data is primarily stored in the `.ff` (*feature file*) format. There are no sub-tables, only reference columns. Both references and `.ff` feature files are represented by files, and the tables they reside in are represented by directories. In order to create schema, we would simply add new folders with new `.ff` files for each column to our new data-base directory. Consider the following sample directory structure:
 - project directory
@@ -59,36 +62,19 @@ Integer
 ```
 ###### readable data-types
 
-#### querying
+### querying
 
-#### headers
-You will likely want an *API* of some sort to query a `ChiDB` servers. Every query, including your initial query, will be sent with a two-byte header. This header includes three fields: the `opcode` (4 bits), the `transaction id` (4 bits) (composing the first byte) and the second byte (8 bits) is dedicated to the *command character* -- a single-character reference that requests a query command.
-- The `opcode` returns a success code dependent on the status of the last query. See [opcodes](#opcodes) for a full list of opcodes.
-- The `transaction id` will be the ID of the transaction that is just issued. This needs to be sent **back** to the server on each query, and will need to be wrapped into each header we send to the server.
 
-So, from the API's perspective both the opcode and transaction ID are sent back to the server, meaning we can just send back the first character we recieve as the header. The second char would then be our selected query command, and from there our arguments are provided directly and separated by `|!|`. For the initial connection the first character would be nothing, and for `S` we provide spaces as separators.
-```julia
-using Toolips
+##### clients
 
-sock = Toolips.connect("127.0.0.1":2025)
-
-write!(sock, "nS dbkey admin adminpwd\n")
-
-resp = String(readavailable(sock))
-# (opcode)
-header = bitstring(resp[1:1])
-
-if header[1:4] == "0001"
-    println("query accepted!")
-else
-    throw("not verified, the query will not work")
-end
-# list tables:
-write!(sock, resp[1:1] * "l")
-```
 ###### commands
+Commands are issued to the server using 
 - `()` indicates an optional argument.
-- `(table)/column` indicates the ability to provide the column if a table is selected.
+- `(table)/column` indicates the ability to provide the column if a table is selected, *or* provide a column and table in the `table/column` format. For example:
+```julia
+write!(sock, "$(curr_header)vnewt/name|!|1|!|frank\n")
+```
+
 <table>
   <tr>
     <th>character</th>
@@ -247,6 +233,38 @@ write!(sock, resp[1:1] * "l")
   </tr>
 </table>
 
+#### query examples
+
+---
+## creating clients
+
+#### existing clients
+
+#### headers
+You will likely want an *API* of some sort to query a `ChiDB` servers. Every query, including your initial query, will be sent with a two-byte header. This header includes three fields: the `opcode` (4 bits), the `transaction id` (4 bits) (composing the first byte) and the second byte (8 bits) is dedicated to the *command character* -- a single-character reference that requests a query command.
+- The `opcode` returns a success code dependent on the status of the last query. See [opcodes](#opcodes) for a full list of opcodes.
+- The `transaction id` will be the ID of the transaction that is just issued. This needs to be sent **back** to the server on each query, and will need to be wrapped into each header we send to the server.
+
+So, from the API's perspective both the opcode and transaction ID are sent back to the server, meaning we can just send back the first character we recieve as the header. The second char would then be our selected query command, and from there our arguments are provided directly and separated by `|!|`. For the initial connection the first character would be nothing, and for `S` we provide spaces as separators.
+```julia
+using Toolips
+
+sock = Toolips.connect("127.0.0.1":2025)
+
+write!(sock, "nS dbkey admin adminpwd\n")
+
+resp = String(readavailable(sock))
+# (opcode)
+header = bitstring(resp[1:1])
+
+if header[1:4] == "0001"
+    println("query accepted!")
+else
+    throw("not verified, the query will not work")
+end
+# list tables:
+write!(sock, resp[1:1] * "l")
+```
 ###### opcodes
 
 <div align="center">
