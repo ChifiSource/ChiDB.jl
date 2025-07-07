@@ -34,6 +34,8 @@ make_transaction_id() = begin
     join(sampler[rand(1:2)] for val in 1:4)
 end
 
+include("dtypes.jl")
+
 abstract type AbstractDBCommand end
 
 struct DBCommand{T} <: AbstractDBCommand end
@@ -108,6 +110,7 @@ load_schema!(db::DeeBee) = begin
             colname = namesplits[2]
             framename = namesplits[1]
             join!(this_frame, string(colname) => T) do e
+                @warn "ref issue?"
                 db.tables[framename][colname][e]
             end
             push!(db.refinfo[path], framename)

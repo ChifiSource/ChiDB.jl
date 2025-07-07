@@ -234,18 +234,24 @@ function store_into!(tblname::AbstractString, selected_table::AlgebraStreamFrame
             push!(refwrites, colname => writevals[cole])
             continue
         end
+        lastval = read(selected_table.paths[colname], String)[end]
         open(selected_table.paths[colname], "a") do o::IOStream
-            write(o, writevals[cole] * "\n")
+            if lastval != '\n'
+                write(o, "\n" * writevals[cole])
+                return
+            end
+            write(o,  writevals[cole])
         end
     end
     if tblname in keys(DB_EXTENSION.refinfo)
         for reftable in DB_EXTENSION.refinfo[tblname]
             this_table = DB_EXTENSION.tables[reftable]
+            n_names = length(this_table.names)
             vals = (begin
                 this_T = this_table.T[cole]
                 colname = this_table.names[cole]
                 if colname in keys(refwrites)
-                    string(refwrites[colname]) * "\n"
+                    string(refwrites[colname])
                 else
                     AlgebraStreamFrames.AlgebraFrames.algebra_initializer(this_T)
                 end
@@ -319,24 +325,39 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:w}}, args::Abstract
     else
         return(2, "set row takes three arguments, or two with a table selected.")
     end
-    sel_table = DB_EXTENSION.tables[tables]
+    sel_table = DB_EXTENSION.tables[table]
     if rown > length(sel_table)
         return(2, "row requested is greater than length of table ($(length(sel_table)))")
     end
     n = length(sel_table.names)
     valsplts = split(inp, "!;")
-    if ~(length(valsplits) == n)
+    if ~(length(valsplts) == n)
         return(2, "not enough values provided for each row")
     end
     path_keys = keys(sel_table.paths)
+    if sel_table.length <= rown
+        return(2, "index error; index $(rown) on $(length(vals))")
+    end
     for e in 1:n
         colname = sel_table.names[e]
-        if ~(colname in path_keys)
-            # ref table
+        path = if ~(colname in path_keys)
+            direc = readdir(DB_EXTENSION.dir * "/$table")
+            refname = findfirst(x -> contains(x, "$colname.ref"), direc)
+            @warn DB_EXTENSION.refinfo
+            ref_table = DB_EXTENSION.refinfo[colname]
+            ref_tablen = split(direc[refname], "_")[1]
+            ref_table = DB_EXTENSION.tables[ref_tablen]
+            ref_table.paths[colname]
         else
-
+            sel_table.paths[colname]
+        end
+        vals = readlines(path)
+        vals[rown] = valsplts[e]
+        open(path, "w") do o::IOStream
+            write(o, join(vals, "\n"))
         end
     end
+    return(0, "set row values")
 end
 
 #==
@@ -362,21 +383,21 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:j}}, args::Abstract
         # reference join?
         if contains(args[2], "/")
             newn = replace(args[2], "/" => "_")
-            @warn "DIR::::"
-            @warn DB_EXTENSION.dir * "/$table/" * "$(newn).ref"
-            @warn table
-            @warn colname
             touch(DB_EXTENSION.dir * "/$table/" * "$(newn).ref")
             nm_splits = split(args[2], "/")
             reftable = string(nm_splits[1]) 
             refcol = string(nm_splits[2])
+            if table in keys(DB_EXTENSION.refinfo)
+                push!(DB_EXTENSION.refinfo[table], string(reftable))
+            else
+                DB_EXTENSION.refinfo[table] = Vector{String}([string(reftable)])
+            end
             reftab = DB_EXTENSION.tables[reftable]
-            @info refcol
-            @info reftab.names
             axis = findfirst(n -> n == refcol, reftab.names)
             T = reftab.T[axis]
             join!(DB_EXTENSION.tables[table], string(refcol) => T) do e
-                DB_EXTENSION.tables[reftable][refcol][e]
+                @warn "BROKEN FROM REF"
+                reftab[refcol][e]
             end
             return(0, "")
         end
@@ -586,6 +607,9 @@ end
 
 # set
 function perform_command!(user::DBUser, cmd::Type{DBCommand{:K}}, args::AbstractString ...)
+    if ~(user.username) == "admin"
+        return(1, "cannot perform 'userset' unless you are 'admin'.")
+    end
     n = length(args)
     if ~(n in (2, 3))
         return(2, "'set' takes at most 3 arguments, at minimum 2 (user, name, pwd)")

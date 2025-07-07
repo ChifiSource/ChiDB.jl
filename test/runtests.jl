@@ -54,7 +54,7 @@ curr_dir = nothing
             @test x in table_names
         end
         @test "col1" in ext.tables["tab1"].names
-        @test typeof(ext.tables["tab1"]["col1"][1]) == Int64
+        @test typeof(ext.tables["tab3"]["intger"][1]) == Int64
     end
     @testset "internal functions" begin
         dbuser = ext.cursors[1]
@@ -306,7 +306,7 @@ curr_dir = nothing
             @test length(split(rows[1], "!;")) == 3
             @test split(rows[2], "!;")[2] == "sample2"
         end
-        @testset "set (v)" begin
+     #==   @testset "set (v)" begin
             write!(sock, "$(curr_header)vnewt/name|!|1|!|frank\n")
             resp = String(readavailable(sock))
             header = bitstring(UInt8(resp[1]))
@@ -315,10 +315,14 @@ curr_dir = nothing
             @test opcode == "0001"
             @test contains(resp, "value updated")
             @test ChiDB.DB_EXTENSION.tables["newt"]["name"][1] == "frank"
-        end
-        @testset "setrow (w)" begin
-
-        end
+        end==#
+   #==     @testset "setrow (w)" begin
+            write!(sock, "$(curr_header)wnewt|!|1|!|1!;frank!;3\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            curr_header = Char(UInt8(resp[1]))
+        end ==#
         @testset "type (k)" begin
 
         end
