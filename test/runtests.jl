@@ -347,7 +347,17 @@ curr_dir = nothing
             @test contains(resp[3:end], "0")
         end
         @testset "type (k)" begin
-
+            write!(sock, "$(curr_header)knewt/main|!|String\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            curr_header = Char(UInt8(resp[1]))
+            @test opcode == "0001"
+            @test contains(resp, "type set")
+            sel_tab = ChiDB.DB_EXTENSION.tables["newt"]
+            axis = findfirst(x -> x == "main", sel_tab.names)
+            sel_tab = ChiDB.DB_EXTENSION.tables["newt"]
+            @test sel_tab.T[axis] <: AbstractString
         end
         @testset "deleteat (d)" begin
 
@@ -368,7 +378,7 @@ curr_dir = nothing
             tabns = names(ChiDB.DB_EXTENSION.tables["newt"])
             @test "count" in tabns
             @test ~("main" in tabns)
-            @test ChiDB.DB_EXTENSION.tables["newt"]["count"][1] == 1
+            @test ChiDB.DB_EXTENSION.tables["newt"]["count"][1] == "1"
         end
     end
     @testset "broken queries" verbose = true begin

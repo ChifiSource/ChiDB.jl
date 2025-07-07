@@ -438,15 +438,15 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:k}}, args::Abstract
     axis = findfirst(x -> x == col, sel_table.names)
     stream_type = StreamDataType{Symbol(args[2])}
     sel_table.T[axis] = get_datatype(stream_type)
-    if col in keys(table.paths)
-        alllines = read(table.paths[col], String)
+    if col in keys(sel_table.paths)
+        alllines = read(sel_table.paths[col], String)
         flinef = findfirst("\n", alllines)
         output = if isnothing(flinef)
             args[2] * "\n"
         else
-            args[2] * alllines[flinef:end]
+            args[2] * alllines[minimum(flinef):end]
         end
-        open(table.paths[col], "w") do o::IOStream
+        open(sel_table.paths[col], "w") do o::IOStream
             write(o, output)
         end
         output = nothing
