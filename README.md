@@ -4,22 +4,31 @@
 
 ###### a toolips-based data-base server
 `ChiDB` is a unique data-base server designed around the `AlgebraFrames` concept and the `.ff` file format. Schema is laid using directories and filenames and data is live-read into memory. This is currently in a state of relative infancy, but is primarily being developed for my own use cases and to demonstrate the various server-building capabilities of `Toolips`.
-- [get started]()
+- [get started](#get-started)
   - [adding chidb](#adding)
   - [documentation](#documentation)
 - [chidb setup](#setup)
-  - [loading schema](#loading-schema)
+  - [schema](#schema)
     - [feature files](#feature-files)
-    - [schema](#schema)
     - [readable data-types](#readable-data-types)
     - [editing schema](#editing-schema)
 - [querying](#querying)
+  - [clients](#clients)
   - [command list](#commands)
   - [query examples](#example-queries)
 - [creating chidb clients](#creating-clients)
-  - [chidb headers](#headers)
   - [existing clients](#existing-clients)
-  - [opcode RFC](#opcodes)
+  - [chidb headers](#headers)
+    - [header RFC](#opcodes)
+
+  
+ 
+## get started
+
+#### adding
+
+#### documentation
+
 ## setup
 In order to use `ChiDB`, we first need [julia](https://julialang.org). With Julia installed, the package may be added with `Pkg`:
 ```julia
@@ -31,10 +40,10 @@ To setup a `ChiDB` server directory, run `ChiDB.start` and provide an **empty** 
 start(path::String, ip::IP4 = "127.0.0.1":8005)
 ```
 Our `admin` login will also be printed here; by querying with this new `admin` login we may create new users.
-#### loading schema
-Once we have a data-base server and its directory, we are going to need to create schema. There are two ways to create your schema:
+#### schema
+`ChiDB` schema is created using two different techniques:
 - *querying*
-- or by simply creating a filesystem.
+- or by creating a filesystem of `.ff` and `.ref` files.
 
 `ChiDB`'s internal data is primarily stored in the `.ff` (*feature file*) format. There are no sub-tables, only reference columns. Both references and `.ff` feature files are represented by files, and the tables they reside in are represented by directories. In order to create schema, we would simply add new folders with new `.ff` files for each column to our new data-base directory. Consider the following sample directory structure:
 - project directory
@@ -46,14 +55,190 @@ Once we have a data-base server and its directory, we are going to need to creat
   - /table2
     - /col1.ff
 
+##### feature files
 Each `.ff` file's first line will be a readable data-type. For example, `col1.ff` from above could be
 ```ff
 Integer
 ```
-## readable data-types
-## usage
+###### readable data-types
 
-#### querying
+### querying
+
+
+##### clients
+
+###### commands
+Commands are issued to the server using 
+- `()` indicates an optional argument.
+- `(table)/column` indicates the ability to provide the column if a table is selected, *or* provide a column and table in the `table/column` format. For example:
+```julia
+write!(sock, "$(curr_header)vnewt/name|!|1|!|frank\n")
+```
+
+<table>
+  <tr>
+    <th>character</th>
+    <th>name</th>
+    <th>description</th>
+    <th>arguments</th>
+  </tr>
+  <tr>
+    <td align="center">l</td>
+    <td align="center">list</td>
+    <td>lists the columns within a table, and their types, or lists all tables when provided with no argument</td>
+    <td>(table)</td>
+  </tr>
+    <tr>
+    <td align="center">s</td>
+    <td align="center">select</td>
+    <td align="center">Selects a table.</td>
+    <td>table</td>
+  </tr>
+    <tr>
+    <td align="center">t</td>
+    <td align="center">create</td>
+    <td align="center">creates a new table</td>
+    <td>tablename</td>
+  </tr>
+    <tr>
+      <th>
+      <th>
+    <th align="center">get-store commands</th>
+      <th></th>
+  </tr>
+      <tr>
+    <td align="center">g</td>
+    <td align="center">get</td>
+    <td align="center">gets values using vertical indexing</td>
+    <td>(table)/column (range)</td>
+  </tr>
+        <tr>
+    <td align="center">r</td>
+    <td align="center">getrow</td>
+    <td align="center">Gets a full row of data</td>
+    <td>(table)/column rown</td>
+  </tr>
+          <tr>
+    <td align="center">i</td>
+    <td align="center">index</td>
+    <td align="center">Gets the index where a certain value occurs in a given table.</td>
+    <td>(table)/column value</td>
+  </tr>
+            <tr>
+    <td align="center">a</td>
+    <td align="center">store</td>
+    <td align="center">Stores values, separated by `!;`, into a given table. Will return an argument error if the incorrect shape is provided.</td>
+    <td>(table) value!;value2</td>
+  </tr>
+            <tr>
+    <td align="center">v</td>
+    <td align="center">set</td>
+    <td align="center">Sets a singular value in a table.</td>
+    <td>(table)/column row value</td>
+  </tr>
+              <tr>
+    <td align="center">w</td>
+    <td align="center">setrow</td>
+    <td align="center">Sets the values of an entire row on a table</td>
+    <td>(table) row value1!;value2</td>
+  </tr>
+            <tr>
+    <th align="center"></th>
+    <th align="center"></th>
+    <th align="center">column management</th>
+    <th></th>
+  </tr>
+              <tr>
+    <td align="center">j</td>
+    <td align="center">join</td>
+    <td align="center">Adds a new column to a frame, creates a reference column when used with a column path from another table.</td>
+    <td>(table) (reftable)/colname (Type)</td>
+  </tr>
+                <tr>
+    <td align="center">k</td>
+    <td align="center">type</td>
+    <td align="center">Attempts to cast a given type to a provided column.</td>
+    <td>(table)/colname Type</td>
+  </tr>
+                <tr>
+    <td align="center">e</td>
+    <td align="center">rename</td>
+    <td align="center">Renames a given column or table</td>
+    <td>(table) table_or_colname</td>
+  </tr>
+              <tr>
+    <th align="center"></th>
+    <th align="center"></th>
+    <th align="center">deleters</th>
+    <th></th>
+                <tr>
+    <td align="center">d</td>
+    <td align="center">deleteat</td>
+    <td align="center">Deletes a row from a given table.</td>
+    <td>(table) row</td>
+  </tr>
+                  <tr>
+    <td align="center">z</td>
+    <td align="center">delete</td>
+    <td align="center">Deletes a table</td>
+    <td>table</td>
+  </tr>
+                <tr>
+    <th align="center"></th>
+    <th align="center"></th>
+    <th align="center">built-in operations</th>
+    <th></th>
+                <tr>
+                                  <tr>
+    <td align="center">p</td>
+    <td align="center">compare</td>
+    <td align="center">Checks if the provided value is the same as the stored data.</td>
+    <td>(table)/column rown value</td>
+  </tr>
+                                    <tr>
+    <td align="center">n</td>
+    <td align="center">in</td>
+    <td align="center">Checks if the provided value is within the column.</td>
+    <td>(table)/column value</td>
+  </tr>
+                                <tr>
+    <th align="center"></th>
+    <th align="center"></th>
+    <th align="center">server</th>
+    <th></th>
+                <tr>
+                                                    <tr>
+    <td align="center">U</td>
+    <td align="center">users</td>
+    <td align="center">Lists current users.</td>
+    <td></td>
+  </tr>
+      <tr>
+    <td align="center">C</td>
+    <td align="center">newuser</td>
+    <td align="center">Creates a new user. Will return the new name, password, and dbkey.</td>
+    <td>user (pwd)</td>
+  </tr>
+                                                      <tr>
+    <td align="center">K</td>
+    <td align="center">setuser</td>
+    <td align="center">Sets any users login -- requires username to be admin.</td>
+    <td>user, name (pwd)</td>
+  </tr>
+                                                      <tr>
+    <td align="center">L</td>
+    <td align="center">logout</td>
+    <td align="center">Disconnects from the server.</td>
+    <td></td>
+  </tr>
+</table>
+
+#### query examples
+
+---
+## creating clients
+
+#### existing clients
 
 #### headers
 You will likely want an *API* of some sort to query a `ChiDB` servers. Every query, including your initial query, will be sent with a two-byte header. This header includes three fields: the `opcode` (4 bits), the `transaction id` (4 bits) (composing the first byte) and the second byte (8 bits) is dedicated to the *command character* -- a single-character reference that requests a query command.
@@ -80,78 +265,6 @@ end
 # list tables:
 write!(sock, resp[1:1] * "l")
 ```
-###### commands
-- `()` indicates an optional argument.
-- `(table)/column` indicates the ability to provide the column if a table is selected.
-<table>
-  <tr>
-    <th>character</th>
-    <th>name</th>
-    <th>description</th>
-    <th>arguments</th>
-  </tr>
-  <tr>
-    <td align="center">l</td>
-    <td align="center">list</td>
-    <td>lists the columns within a table, and their types, or lists all tables when provided with no argument</td>
-    <td align="center">(table)</td>
-  </tr>
-    <tr>
-    <td align="center">s</td>
-    <td align="center">select</td>
-    <td align="center">Selects a table.</td>
-    <td>table</td>
-  </tr>
-    <tr>
-    <td align="center">t</td>
-    <td align="center">create</td>
-    <td align="center">creates a new table</td>
-    <td>tablename</td>
-  </tr>
-      <tr>
-    <td align="center">g</td>
-    <td align="center">get</td>
-    <td align="center">gets values using vertical indexing</td>
-    <td>(table)/column (range)</td>
-  </tr>
-        <tr>
-    <td align="center">r</td>
-    <td align="center">getrow</td>
-    <td align="center">Gets a full row of data</td>
-    <td>(table)/column rown</td>
-  </tr>
-          <tr>
-    <td align="center">i</td>
-    <td align="center">index</td>
-    <td align="center">Gets the index where a certain value occurs in a given table.</td>
-    <td>(table)/column value</td>
-  </tr>
-            <tr>
-    <td align="center">a</td>
-    <td align="center">store</td>
-    <td align="center">Stores values, separated by `!;`, into a given table. Will return an argument error if the incorrect shape is provided.</td>
-    <td>(table) value!;value2</td>
-  </tr>
-              <tr>
-    <td align="center">j</td>
-    <td align="center">join</td>
-    <td align="center">Adds a new column to a frame, creates a reference column when used with a column path from another table.</td>
-    <td>(table) (reftable)/colname (Type)</td>
-  </tr>
-                <tr>
-    <td align="center">k</td>
-    <td align="center">settype</td>
-    <td align="center">Attempts to cast a given type to a provided column.</td>
-    <td>(table)/colname Type</td>
-  </tr>
-                <tr>
-    <td align="center">e</td>
-    <td align="center">rename</td>
-    <td align="center">Renames a given column or table</td>
-    <td>(table) table_or_colname</td>
-  </tr>
-</table>
-
 ###### opcodes
 
 <div align="center">
@@ -193,7 +306,7 @@ write!(sock, resp[1:1] * "l")
     <td align="center">false</td>
   </tr>
         <tr>
-    <td align="center">1010</td>
+    <td align="center">1001</td>
     <td align="center"><b>ERROR</b></td>
     <td align="center">bad dbkey (connection closed)</td>
     <td align="center">false</td>

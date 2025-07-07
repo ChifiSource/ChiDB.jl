@@ -21,7 +21,10 @@ if length(curr_dir) > 4
         if dir in necessary
             continue
         end
-        rm(testdb_dir * "/" * dir, force = true)
+        rm(testdb_dir * "/" * dir, force = true, recursive = true)
+    end
+    open(testdb_dir * "/tab1/col1.ff", "w") do o::IOStream
+        write(o, """Integer""")
     end
 end
 
@@ -54,7 +57,7 @@ curr_dir = nothing
             @test x in table_names
         end
         @test "col1" in ext.tables["tab1"].names
-        @test typeof(ext.tables["tab1"]["col1"][1]) == Int64
+        @test typeof(ext.tables["tab3"]["intger"][1]) == Int64
     end
     @testset "internal functions" begin
         dbuser = ext.cursors[1]
@@ -182,41 +185,232 @@ curr_dir = nothing
             sel_tab = ChiDB.DB_EXTENSION.tables["newt"]
             @test "main" in names(sel_tab)
             @test sel_tab.T[1] <: Integer
-            # TODO add secondary col test + ref test
+            
+            write!(sock, "$(curr_header)jnewt|!|name|!|String\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            curr_header = Char(UInt8(resp[1]))
+            @test opcode == "0001"
+            @test "name" in names(sel_tab)
+            # ref col join
+            write!(sock, "$(curr_header)jnewt|!|tab1/col1\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            curr_header = Char(UInt8(resp[1]))
+            @test opcode == "0001"
+            @test "col1" in names(sel_tab)
+            @test length(names(sel_tab)) == 3
+            @test length(keys(sel_tab.paths)) == 2
+            @test isfile(testdb_dir * "/newt/tab1_col1.ref")
         end
         @testset "store (a)" begin 
-
+            write!(sock, "$(curr_header)anewt|!|6!;sample!;1\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            curr_header = Char(UInt8(resp[1]))
+            @test opcode == "0001"
+            @test length(ChiDB.DB_EXTENSION.tables["newt"]) > 0
+            @test "sample" in ChiDB.DB_EXTENSION.tables["newt"]["name"]
+            
+            write!(sock, "$(curr_header)anewt|!|12!;sample2!;7\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            curr_header = Char(UInt8(resp[1]))
+            @test opcode == "0001"
+            @test length(ChiDB.DB_EXTENSION.tables["newt"]) > 0
+            @test "sample" in ChiDB.DB_EXTENSION.tables["newt"]["name"]
         end
         @testset "get (g)" begin
+            write!(sock, "$(curr_header)gnewt/name\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            curr_header = Char(UInt8(resp[1]))
+            @test opcode == "0001"
+            vals = replace(resp[3:end], "\n" => "")
+            @test contains(vals, "!;")
+            splts = filter!(x -> x != "", split(vals, "!;"))
+            @test length(splts) == 2
+            @test "sample" in splts
+            @test "sample2" in splts
 
+            write!(sock, "$(curr_header)gnewt/main|!|1:2\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            curr_header = Char(UInt8(resp[1]))
+            @test opcode == "0001"
+            @test contains(vals, "!;")
+            vals = resp[3:end]
+            splts = filter!(x -> x == "", split(vals, "!;"))
+            for x in splts
+                successful_parse = try
+                    parse(Int64, replace(x, " " => "", "\n" => ""))
+                    true
+                catch
+                    false
+                end
+                @test successful_parse
+            end
         end
         @testset "index (i)" begin
-
+            write!(sock, "$(curr_header)inewt/name|!|sample\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            curr_header = Char(UInt8(resp[1]))
+            @test opcode == "0001"
+            val = replace(resp[3:end], "\n" => "")
+            i = nothing
+            successful_index_parse = try
+                i = parse(Int64, val)
+                true
+            catch
+                @warn val
+                false
+            end
+            @test successful_index_parse
+            @test i == 1
         end
         @testset "getrow (r)" begin
+            write!(sock, "$(curr_header)rnewt|!|1\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            curr_header = Char(UInt8(resp[1]))
+            @test opcode == "0001"
+            vals = split(replace(resp[3:end], "\n" => ""), "!;")
+            @test length(vals) == 3
+            @test vals[2] == "sample"
+            successful_parse = try
+                parse(Int64, vals[3])
+                true
+            catch
+                false
+            end
+            @test successful_parse
 
+            # get multirow
+            write!(sock, "$(curr_header)rnewt|!|1:2\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            curr_header = Char(UInt8(resp[1]))
+            @test opcode == "0001"
+            rows = split(replace(resp[3:end], "\n" => ""), "!N")
+            @warn rows
+            @test length(rows) == 2
+            @test length(split(rows[1], "!;")) == 3
+            @test split(rows[2], "!;")[2] == "sample2"
+        end
+        @testset "set (v)" begin
+            write!(sock, "$(curr_header)vnewt/name|!|1|!|frank\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            curr_header = Char(UInt8(resp[1]))
+            @test opcode == "0001"
+            @test contains(resp, "value updated")
+            @test ChiDB.DB_EXTENSION.tables["newt"]["name"][1] == "frank"
+        end
+        @testset "setrow (w)" begin
+            write!(sock, "$(curr_header)wnewt|!|1|!|1!;frank!;3\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            curr_header = Char(UInt8(resp[1]))
+            @test opcode == "0001"
+            @test ChiDB.DB_EXTENSION.tables["newt"]["main"][1] == 1
+            @test ChiDB.DB_EXTENSION.tables["tab1"]["col1"][1] == 3
+        end
+        @testset "in (n)" begin
+            write!(sock, "$(curr_header)nnewt/name|!|sample2\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            curr_header = Char(UInt8(resp[1]))
+            @test opcode == "0001"
+            @test contains(resp[3:end], "1")
+
+            write!(sock, "$(curr_header)nnewt/name|!|great\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            curr_header = Char(UInt8(resp[1]))
+            @test opcode == "0001"
+            @test contains(resp[3:end], "0")
         end
         @testset "type (k)" begin
-
-        end
-        @testset "rename (e)" begin
-
+            write!(sock, "$(curr_header)knewt/main|!|String\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            curr_header = Char(UInt8(resp[1]))
+            @test opcode == "0001"
+            @test contains(resp, "type set")
+            sel_tab = ChiDB.DB_EXTENSION.tables["newt"]
+            axis = findfirst(x -> x == "main", sel_tab.names)
+            sel_tab = ChiDB.DB_EXTENSION.tables["newt"]
+            @test sel_tab.T[axis] <: AbstractString
         end
         @testset "deleteat (d)" begin
 
         end
         @testset "delete (z)" begin
-
+            # (quick query to create a table/col to delete)
+            write!(sock, "$(curr_header)tdeltest\n")
+            resp = String(readavailable(sock))
+            curr_header = Char(UInt8(resp[1]))
+            write!(sock, "$(curr_header)jdeltest|!|testcol|!|String\n")
+            resp = String(readavailable(sock))
+            curr_header = Char(UInt8(resp[1]))
+            
+            write!(sock, "$(curr_header)znewt/col1\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            curr_header = Char(UInt8(resp[1]))
+            @test opcode == "0001"
+            sel_table = ChiDB.DB_EXTENSION.tables["newt"]
+            @test length(sel_table.names) == 2
+            @test length(sel_table.T) == 2
+            @test length(sel_table.gen) == 2
+            @test "deltest" in keys(ChiDB.DB_EXTENSION.tables)
+            @test isdir(ChiDB.DB_EXTENSION.dir * "/deltest")
+            write!(sock, "$(curr_header)zdeltest\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            curr_header = Char(UInt8(resp[1]))
+            @test opcode == "0001"
+            @test ~(isdir(ChiDB.DB_EXTENSION.dir * "/deltest"))
+            @test ~("deltest" in keys(ChiDB.DB_EXTENSION.tables))
         end
         @testset "compare (p)" begin
-
+            write!(sock, "$(curr_header)pnewt/name|!|1|!|frank\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            curr_header = Char(UInt8(resp[1]))
+            @test opcode == "0001"
+            @test resp[end - 1] == '1'
         end
-        @testset "in (n)" begin
-
+        @testset "rename (e)" begin
+            write!(sock, "$(curr_header)enewt/main|!|count\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            curr_header = Char(UInt8(resp[1]))
+            @test opcode == "0001"
+            tabns = names(ChiDB.DB_EXTENSION.tables["newt"])
+            @test "count" in tabns
+            @test ~("main" in tabns)
+            @test ChiDB.DB_EXTENSION.tables["newt"]["count"][1] == "1"
         end
-    end
-    @testset "query commands" verbose = true begin
-
     end
     @testset "broken queries" verbose = true begin
 

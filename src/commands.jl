@@ -15,17 +15,19 @@ t - create
 
 # get-store
 g - get
-r - get row
-i - get index
+r - getrow
+i - index
 a - store
+v - set
+w - setrow
 
 # column management
 j - join
-k - set type
+k - type
 e - rename
 
 # deleters
-d - delete at
+d - deleteat
 z - delete
 
 # built-in operations
@@ -120,7 +122,6 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:g}}, args::Abstract
     end
     if n > 1
         range_sel = args[2]
-        @info range_sel
         selected_ind = 1
         if range_sel == "where"
             wherelookup = Dict("==" => ==, "<" => <, "<=" => <=, 
@@ -149,12 +150,10 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:g}}, args::Abstract
             end
         end
         generated = DB_EXTENSION.tables[string(table_selected)][string(col_selected)]
-        return(0, join((string(gen) for gen in generated[selected_ind]), ";"))
+        return(0, join((string(gen) for gen in generated[selected_ind]), "!;"))
     end
-    @warn table_selected
-    @warn col_selected
     generated = DB_EXTENSION.tables[string(table_selected)][string(col_selected)]
-    return(0, join((string(gen) for gen in generated), ";"))
+    return(0, join((string(gen) for gen in generated), "!;"))
 end
 # get row
 function perform_command!(user::DBUser, cmd::Type{DBCommand{:r}}, args::AbstractString ...)
@@ -172,14 +171,18 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:r}}, args::Abstract
     end
     if contains(ind, ":")
         parts = split(ind, ":")
-        ind = parse(Int64, ind[1]):parse(Int64, ind[2])
+        ind = parse(Int64, parts[1]):parse(Int64, parts[2])
     else
         ind = parse(Int64, args[2])
     end
-    gen = DB_EXTENSION.tables[table_selected]
+    gen = generate(DB_EXTENSION.tables[table_selected])
+    rows = AlgebraStreamFrames.framerows(gen)[ind]
+    if typeof(ind) == Int64
+        rows = [rows]
+    end
     result = join((begin
-        join((string(val) for val in row.values), "!;")
-    end for row in eachrow(gen)[ind]), "\n")
+            join((string(val) for val in row.values), "!;")
+        end for row in rows), "!N")
     return(0, result)
 end
 # get index
@@ -227,21 +230,27 @@ function store_into!(tblname::AbstractString, selected_table::AlgebraStreamFrame
         colname = selected_table.names[cole]
         if ~(colname in table_paths)
             # reftables
-            push!(refwrites, colname => writevals[e])
+            push!(refwrites, colname => writevals[cole])
             continue
         end
+        lastval = read(selected_table.paths[colname], String)[end]
         open(selected_table.paths[colname], "a") do o::IOStream
-            write(o, writevals[cole] * "\n")
+            if lastval != '\n'
+                write(o, "\n" * writevals[cole])
+                return
+            end
+            write(o,  writevals[cole])
         end
     end
     if tblname in keys(DB_EXTENSION.refinfo)
         for reftable in DB_EXTENSION.refinfo[tblname]
             this_table = DB_EXTENSION.tables[reftable]
+            n_names = length(this_table.names)
             vals = (begin
                 this_T = this_table.T[cole]
                 colname = this_table.names[cole]
                 if colname in keys(refwrites)
-                    string(refwrites[colname]) * "\n"
+                    string(refwrites[colname])
                 else
                     AlgebraStreamFrames.AlgebraFrames.algebra_initializer(this_T)
                 end
@@ -250,6 +259,103 @@ function store_into!(tblname::AbstractString, selected_table::AlgebraStreamFrame
             this_table.length += 1
         end
     end
+end
+# set
+function perform_command!(user::DBUser, cmd::Type{DBCommand{:v}}, args::AbstractString ...)
+    table, col = get_selected_col(user, args[1])
+    if typeof(table) <: Integer
+        return(table, col)
+    end
+    if length(args) != 3
+        return(2, "set requires a table/column (1), row (2), and value (3)")
+    end
+    rown = 0
+    try
+        rown = parse(Int64, args[2])
+    catch
+        return(2, "failed to parse row: $(args[2])")
+    end
+    sel_tab = DB_EXTENSION.tables[table]
+    path = if ~(col in keys(sel_tab.paths))
+        direc = readdir(DB_EXTENSION.dir * "/$table")
+        refname = findfirst(x -> contains(x, "$col.ref"), direc)
+        ref_table = DB_EXTENSION.refinfo[col]
+        ref_tablen = split(direc[refname], "_")[1]
+        ref_table = DB_EXTENSION.tables[ref_tablen]
+        ref_table.paths[col]
+    else
+        sel_tab.paths[col]
+    end
+    all_lines = readlines(path)
+    if length(all_lines) <= rown
+        return(2, "index error; index $(rown) on $(length(all_lines))")
+    end
+    all_lines[rown + 1] = args[3]
+    open(path, "w") do o::IOStream
+        write(o, join(all_lines, "\n"))
+    end
+    return(0, "value updated")
+end
+# set row
+function perform_command!(user::DBUser, cmd::Type{DBCommand{:w}}, args::AbstractString ...)
+    n = length(args)
+    inp = ""
+    table, rown = if n == 2
+        table = user.table
+        if user.table == ""
+            return(2, "only row and values provided, and no table selected.")
+        end
+        rown = try
+            parse(args[1], Int64)
+        catch
+            return(2, "failed to parse row: $(args[1])")
+        end
+        inp = args[2]
+        (table, rown)
+    elseif n == 3
+        table = args[1]
+        rown = try
+            parse(Int64, args[2])
+        catch
+            return(2, "failed to parse row: $(args[2])")
+        end
+        inp = args[3]
+        (table, rown)
+    else
+        return(2, "set row takes three arguments, or two with a table selected.")
+    end
+    sel_table = DB_EXTENSION.tables[table]
+    if rown > length(sel_table)
+        return(2, "row requested is greater than length of table ($(length(sel_table)))")
+    end
+    n = length(sel_table.names)
+    valsplts = split(inp, "!;")
+    if ~(length(valsplts) == n)
+        return(2, "not enough values provided for each row")
+    end
+    path_keys = keys(sel_table.paths)
+    if sel_table.length <= rown
+        return(2, "index error; index $(rown) on $(length(vals))")
+    end
+    for e in 1:n
+        colname = sel_table.names[e]
+        path = if ~(colname in path_keys)
+            direc = readdir(DB_EXTENSION.dir * "/$table")
+            refname = findfirst(x -> contains(x, "$colname.ref"), direc)
+            direc = direc[refname]
+            ref_tablen = split(direc, "_")[1]
+            ref_table = DB_EXTENSION.tables[ref_tablen]
+            ref_table.paths[colname]
+        else
+            sel_table.paths[colname]
+        end
+        vals = readlines(path)
+        vals[rown + 1] = valsplts[e]
+        open(path, "w") do o::IOStream
+            write(o, join(vals, "\n"))
+        end
+    end
+    return(0, "set row values")
 end
 
 #==
@@ -269,21 +375,26 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:j}}, args::Abstract
             colname = string(splts[2])
             table = string(splts[1])
         else
-            if user.table == ""
-                return(2, "no table selected to join to")
-            end
-            table = user.table
-            colname = args[1]
+            table = string(args[1])
         end
         T = args[2]
         # reference join?
         if contains(args[2], "/")
-            touch(DB_EXTENSION.dir * "/$table/" * "$(args[2]).ref")
+            newn = replace(args[2], "/" => "_")
+            touch(DB_EXTENSION.dir * "/$table/" * "$(newn).ref")
             nm_splits = split(args[2], "/")
             reftable = string(nm_splits[1]) 
             refcol = string(nm_splits[2])
-            join!(DB_EXTENSION.tables[table], string(colname) => T) do e
-                db.tables[reftable][refcol][e]
+            if table in keys(DB_EXTENSION.refinfo)
+                push!(DB_EXTENSION.refinfo[table], string(reftable))
+            else
+                DB_EXTENSION.refinfo[table] = Vector{String}([string(reftable)])
+            end
+            reftab = DB_EXTENSION.tables[reftable]
+            axis = findfirst(n -> n == refcol, reftab.names)
+            T = reftab.T[axis]
+            join!(DB_EXTENSION.tables[table], string(refcol) => T) do e
+                reftab[refcol][e]
             end
             return(0, "")
         end
@@ -292,16 +403,18 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:j}}, args::Abstract
         colname = args[2]
         table = args[1]
     end
-    T = get_datatype(AlgebraStreamFrames.StreamDataType{Symbol(T)})
     n = length(DB_EXTENSION.tables[table])
+    DT = get_datatype(AlgebraStreamFrames.StreamDataType{Symbol(T)})
     newpath = DB_EXTENSION.dir * "/$table/$colname.ff"
     touch(newpath)
     open(newpath, "w") do o::IOStream
         write(o, string(T) * "\n")
-        val = AlgebraStreamFrames.AlgebraFrames.algebra_initializer(T)(1)
-        write(o, join((string(val) for x in 1:n), "\n"))
+        if n > 0
+            val = AlgebraStreamFrames.AlgebraFrames.algebra_initializer(DT)(1)
+            write(o, join((string(val) for x in 1:n), "\n"))
+        end
     end
-    join!(DB_EXTENSION.tables[table], T, string(colname) => newpath)
+    join!(DB_EXTENSION.tables[table], DT, string(colname) => newpath)
     return(0, "")
 end
 # set type
@@ -325,15 +438,15 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:k}}, args::Abstract
     axis = findfirst(x -> x == col, sel_table.names)
     stream_type = StreamDataType{Symbol(args[2])}
     sel_table.T[axis] = get_datatype(stream_type)
-    if col in keys(table.paths)
-        alllines = read(table.paths[col], String)
+    if col in keys(sel_table.paths)
+        alllines = read(sel_table.paths[col], String)
         flinef = findfirst("\n", alllines)
         output = if isnothing(flinef)
             args[2] * "\n"
         else
-            args[2] * alllines[flinef:end]
+            args[2] * alllines[minimum(flinef):end]
         end
-        open(table.paths[col], "w") do o::IOStream
+        open(sel_table.paths[col], "w") do o::IOStream
             write(o, output)
         end
         output = nothing
@@ -380,9 +493,23 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:e}}, args::Abstract
     end
     pos = findfirst(x -> x == col, sel_table.names)
     sel_table.names[pos] = string(args[2])
+    T = sel_table.T[pos]
     new_fpath = DB_EXTENSION.dir * "/$table/$(args[2]).ff"
     mv(sel_table.paths[col], new_fpath)
     sel_table.paths[col] = new_fpath
+    sel_table.gen[pos] = if T <: AbstractString
+        e::Int64 -> begin
+                lines = filter!(x -> AlgebraStreamFrames.is_emptystr(x), 
+                    readlines(new_fpath))
+            lines[e + 1]
+        end
+    else
+        e::Int64 -> begin
+            lines = filter!(x -> AlgebraStreamFrames.is_emptystr(x), 
+                    readlines(new_fpath))
+            parse(T, lines[e + 1])
+        end
+    end
     return(0, "column renamed")
 end
 
@@ -395,40 +522,46 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:d}}, args::Abstract
     if n != 2
         return(2, "deleteat requires two arguments")
     end
-    table, col = get_selected_col(user, cmd)
+    table, col = get_selected_col(user, args[1])
     if typeof(table) == Int64
         return(table, col)
-    end 
-    this_table = DB_EXTENSION.tables[table][col]
-    
+    end
+    ind = nothing
+    try
+        ind = if contains(args[2], ":")
+            splts = split(args[2], ":")
+            parse(Int64, splts[1]):parse(Int64, splts[2])
+        else
+            parse(Int64, args[2])
+        end
+    catch
+        return(2, "failed to parse index or range for deletion.")
+    end
+    deleteat!(DB_EXTENSION.tables[table][col], ind)
+    return(0, "")
 end
+
 # delete
 function perform_command!(user::DBUser, cmd::Type{DBCommand{:z}}, args::AbstractString ...)
-    if length(args) < 1
-        if user.table == ""
-            return(2, "delete requires a row or table to delete")
-        else
-            
-        end
-    end
-    table = ""
-    col = ""
     if contains(args[1], "/")
-
+        table, col = split(args[1], "/")
+        sel_tab = DB_EXTENSION.tables[table]
+        axis = findfirst(x -> x == col, sel_tab.names)
+        AlgebraStreamFrames.drop!(sel_tab, axis, delete = true)
+        return(0, "deleted column")
     else
         if ~(args[1] in keys(DB_EXTENSION.tables))
-            if user.table == ""
-                return(2, "$(args[1]) is not a table or column path. No valid table selected.")
-            end
-            
+            return(2, "$(args[1]) is not a table or column path. No valid table selected.")
         end
-
+        delete!(DB_EXTENSION.tables, args[1])
+        rm(DB_EXTENSION.dir * "/$(args[1])", force = true, recursive = true)
+        return(0, "deleted table")
     end
-
 end
+
 # compare
 function perform_command!(user::DBUser, cmd::Type{DBCommand{:p}}, args::AbstractString ...)
-    table, col = get_selected_col(user, cmd)
+    table, col = get_selected_col(user, args[1])
     if typeof(table) == Int64
         return(table, col)
     end
@@ -448,7 +581,7 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:n}}, args::Abstract
     if length(args) != 2
         return(2, "in takes a (table)/column and a value")
     end
-    table, col = get_selected_col(user, cmd)
+    table, col = get_selected_col(user, args[1])
     if typeof(table) == Int64
         return(table, col)
     end
@@ -493,6 +626,9 @@ end
 
 # set
 function perform_command!(user::DBUser, cmd::Type{DBCommand{:K}}, args::AbstractString ...)
+    if ~(user.username) == "admin"
+        return(1, "cannot perform 'userset' unless you are 'admin'.")
+    end
     n = length(args)
     if ~(n in (2, 3))
         return(2, "'set' takes at most 3 arguments, at minimum 2 (user, name, pwd)")
