@@ -538,6 +538,7 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:d}}, args::Abstract
         return(2, "failed to parse index or range for deletion.")
     end
     deleteat!(DB_EXTENSION.tables[table][col], ind)
+    return(0, "")
 end
 
 # delete
@@ -547,7 +548,7 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:z}}, args::Abstract
         sel_tab = DB_EXTENSION.tables[table]
         axis = findfirst(x -> x == col, sel_tab.names)
         AlgebraStreamFrames.drop!(sel_tab, axis, delete = true)
-        return(0, "deleted")
+        return(0, "deleted column")
     else
         if ~(args[1] in keys(DB_EXTENSION.tables))
             return(2, "$(args[1]) is not a table or column path. No valid table selected.")

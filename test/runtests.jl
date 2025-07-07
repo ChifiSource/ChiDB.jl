@@ -227,13 +227,11 @@ curr_dir = nothing
         @testset "get (g)" begin
             write!(sock, "$(curr_header)gnewt/name\n")
             resp = String(readavailable(sock))
-            @info "GET RESP: " * resp
             header = bitstring(UInt8(resp[1]))
             opcode = header[1:4]
             curr_header = Char(UInt8(resp[1]))
             @test opcode == "0001"
             vals = replace(resp[3:end], "\n" => "")
-            @info vals
             @test contains(vals, "!;")
             splts = filter!(x -> x != "", split(vals, "!;"))
             @test length(splts) == 2
@@ -363,10 +361,43 @@ curr_dir = nothing
 
         end
         @testset "delete (z)" begin
-
+            # (quick query to create a table/col to delete)
+            write!(sock, "$(curr_header)tdeltest\n")
+            resp = String(readavailable(sock))
+            curr_header = Char(UInt8(resp[1]))
+            write!(sock, "$(curr_header)jdeltest|!|testcol|!|String\n")
+            resp = String(readavailable(sock))
+            curr_header = Char(UInt8(resp[1]))
+            
+            write!(sock, "$(curr_header)znewt/col1\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            curr_header = Char(UInt8(resp[1]))
+            @test opcode == "0001"
+            sel_table = ChiDB.DB_EXTENSION.tables["newt"]
+            @test length(sel_table.names) == 2
+            @test length(sel_table.T) == 2
+            @test length(sel_table.gen) == 2
+            @test "deltest" in keys(ChiDB.DB_EXTENSION.tables)
+            @test isdir(ChiDB.DB_EXTENSION.dir * "/deltest")
+            write!(sock, "$(curr_header)zdeltest\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            curr_header = Char(UInt8(resp[1]))
+            @test opcode == "0001"
+            @test ~(isdir(ChiDB.DB_EXTENSION.dir * "/deltest"))
+            @test ~("deltest" in keys(ChiDB.DB_EXTENSION.tables))
         end
         @testset "compare (p)" begin
-
+            write!(sock, "$(curr_header)pnewt/name|!|1|!|frank\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            curr_header = Char(UInt8(resp[1]))
+            @test opcode == "0001"
+            @test resp[end - 1] == '1'
         end
         @testset "rename (e)" begin
             write!(sock, "$(curr_header)enewt/main|!|count\n")
