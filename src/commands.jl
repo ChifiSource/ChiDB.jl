@@ -122,7 +122,6 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:g}}, args::Abstract
     end
     if n > 1
         range_sel = args[2]
-        @info range_sel
         selected_ind = 1
         if range_sel == "where"
             wherelookup = Dict("==" => ==, "<" => <, "<=" => <=, 
@@ -343,16 +342,15 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:w}}, args::Abstract
         path = if ~(colname in path_keys)
             direc = readdir(DB_EXTENSION.dir * "/$table")
             refname = findfirst(x -> contains(x, "$colname.ref"), direc)
-            @warn DB_EXTENSION.refinfo
-            ref_table = DB_EXTENSION.refinfo[colname]
-            ref_tablen = split(direc[refname], "_")[1]
+            direc = direc[refname]
+            ref_tablen = split(direc, "_")[1]
             ref_table = DB_EXTENSION.tables[ref_tablen]
             ref_table.paths[colname]
         else
             sel_table.paths[colname]
         end
         vals = readlines(path)
-        vals[rown] = valsplts[e]
+        vals[rown + 1] = valsplts[e]
         open(path, "w") do o::IOStream
             write(o, join(vals, "\n"))
         end
@@ -396,7 +394,6 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:j}}, args::Abstract
             axis = findfirst(n -> n == refcol, reftab.names)
             T = reftab.T[axis]
             join!(DB_EXTENSION.tables[table], string(refcol) => T) do e
-                @warn "BROKEN FROM REF"
                 reftab[refcol][e]
             end
             return(0, "")
@@ -406,16 +403,18 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:j}}, args::Abstract
         colname = args[2]
         table = args[1]
     end
-    T = get_datatype(AlgebraStreamFrames.StreamDataType{Symbol(T)})
     n = length(DB_EXTENSION.tables[table])
+    DT = get_datatype(AlgebraStreamFrames.StreamDataType{Symbol(T)})
     newpath = DB_EXTENSION.dir * "/$table/$colname.ff"
     touch(newpath)
     open(newpath, "w") do o::IOStream
         write(o, string(T) * "\n")
-        val = AlgebraStreamFrames.AlgebraFrames.algebra_initializer(T)(1)
-        write(o, join((string(val) for x in 1:n), "\n"))
+        if n > 0
+            val = AlgebraStreamFrames.AlgebraFrames.algebra_initializer(DT)(1)
+            write(o, join((string(val) for x in 1:n), "\n"))
+        end
     end
-    join!(DB_EXTENSION.tables[table], T, string(colname) => newpath)
+    join!(DB_EXTENSION.tables[table], DT, string(colname) => newpath)
     return(0, "")
 end
 # set type

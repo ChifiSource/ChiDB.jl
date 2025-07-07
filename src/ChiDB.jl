@@ -173,11 +173,9 @@ function load_db!(db::DeeBee)
         push!(db.cursors, DBUser(usernames[usere], 
             string(pwd_key[1]), 
             string(replace(pwd_key[2], "\n" => "", "!EOF" => "")), "", ""))
-        @info "loaded dbuser $(usernames[usere])"
     end
     db.enc = Encryptor("AES256", hmac)
     db.dec = Decryptor("AES256", hmac)
-    @info String(decrypt(db.dec, Vector{UInt8}(db.cursors[1].pwd)))
 end
 
 function save_users(db::DeeBee)
@@ -199,7 +197,7 @@ function parse_db_header(header::String)
         throw("Invalid DB header: length does not equal two.")
     end
     optrans = bitstring(UInt8(header[1]))
-    @warn "OPTRANS: $optrans"
+    @warn "OPCODE and TRANSID: $optrans"
     opcode = optrans[1:4]
     transaction_id = optrans[5:8]
     return(opcode, transaction_id, header[2])
@@ -210,46 +208,41 @@ verify = handler() do c::Toolips.SocketConnection
     selected_user = nothing
     while true
         query::String = query * String(readavailable(c))
-        n = length(query)
         if ~(query[end] == '\n')
             yield()
             continue
-        else
-            @info "completed query"
+        end
+        n = length(query)
+        if n < 2
+            header = "1000" * make_transaction_id()
+            write!(c, "$(Char(parse(UInt8, header, base = 2)))\n")
         end
         opcode::String, trans_id::String, cmd::Char = parse_db_header(query[1:2])
         if ~(cmd == 'S')
-            @info "returned bad cmd"
-            return
+            header = "1100" * make_transaction_id()
+            write!(c, "$(Char(parse(UInt8, header, base = 2)))")
         end
         operands = split(query[3:end], " ")
         db_key = operands[1]
         user = operands[2]
         pwd = string(operands[3])
-        @warn "provided user: $user"
-        @warn "provided pwd: $pwd"
-        @warn length(pwd)
-        @warn "provided dbkey: $db_key"
         cursors = c[:DB].cursors
         usere = findfirst(u -> u.username == user, cursors)
         if isnothing(usere)
-            header = "1100" * make_transaction_id() * "\n"
-            write!(c, "$(Char(parse(UInt8, header, base = 2)))")
-            @info "no usere"
+            header = "1100" * make_transaction_id()
+            write!(c, "$(Char(parse(UInt8, header, base = 2)))\n")
             return
         end
         selected_user = cursors[usere]
         if ~(pwd[1:end - 1] == String(trim_padding_PKCS5(decrypt(c[:DB].dec, selected_user.pwd))))
-            @info pwd[1:end - 1]
-            @warn String(decrypt(c[:DB].dec, selected_user.pwd))
-            header = "1100" * make_transaction_id() * "\n"
-            write!(c, "$(Char(parse(UInt8, header, base = 2)))")
+            header = "1100" * make_transaction_id()
+            write!(c, "$(Char(parse(UInt8, header, base = 2)))\n")
             return
         end
         if db_key != selected_user.key
             @warn "invalid dbkey return"
-            header = "1001" * make_transaction_id() * "\n"
-            write!(c, "$(Char(parse(UInt8, header, base = 2)))")
+            header = "1001" * make_transaction_id()
+            write!(c, "$(Char(parse(UInt8, header, base = 2)))\n")
             return
         end
         trans_id = make_transaction_id()
