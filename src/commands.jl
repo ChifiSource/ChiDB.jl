@@ -522,37 +522,42 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:d}}, args::Abstract
     if n != 2
         return(2, "deleteat requires two arguments")
     end
-    table, col = get_selected_col(user, cmd)
+    table, col = get_selected_col(user, args[1])
     if typeof(table) == Int64
         return(table, col)
-    end 
-    this_table = DB_EXTENSION.tables[table][col]
-    
+    end
+    ind = nothing
+    try
+        ind = if contains(args[2], ":")
+            splts = split(args[2], ":")
+            parse(Int64, splts[1]):parse(Int64, splts[2])
+        else
+            parse(Int64, args[2])
+        end
+    catch
+        return(2, "failed to parse index or range for deletion.")
+    end
+    deleteat!(DB_EXTENSION.tables[table][col], ind)
 end
+
 # delete
 function perform_command!(user::DBUser, cmd::Type{DBCommand{:z}}, args::AbstractString ...)
-    if length(args) < 1
-        if user.table == ""
-            return(2, "delete requires a row or table to delete")
-        else
-            
-        end
-    end
-    table = ""
-    col = ""
     if contains(args[1], "/")
-
+        table, col = split(args[1], "/")
+        sel_tab = DB_EXTENSION.tables[table]
+        axis = findfirst(x -> x == col, sel_tab.names)
+        AlgebraStreamFrames.drop!(sel_tab, axis, delete = true)
+        return(0, "deleted")
     else
         if ~(args[1] in keys(DB_EXTENSION.tables))
-            if user.table == ""
-                return(2, "$(args[1]) is not a table or column path. No valid table selected.")
-            end
-            
+            return(2, "$(args[1]) is not a table or column path. No valid table selected.")
         end
-
+        delete!(DB_EXTENSION.tables, args[1])
+        rm(DB_EXTENSION.dir * "/$(args[1])", force = true, recursive = true)
+        return(0, "deleted table")
     end
-
 end
+
 # compare
 function perform_command!(user::DBUser, cmd::Type{DBCommand{:p}}, args::AbstractString ...)
     table, col = get_selected_col(user, args[1])
