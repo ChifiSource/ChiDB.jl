@@ -623,25 +623,31 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:C}}, args::Abstract
         return(1, "the create user command takes a username and optionally a password.")
     end
     newname = args[1]
+    userlist = [user.username for user in DB_EXTENSION.cursors]
+    if newname in userlist
+        return(2, "$newname already exists!")
+    end
     db_dir = DB_EXTENSION.dir * "/db/"
     userd = db_dir * "users.txt"
     secretd = db_dir * "secrets.txt"
     db_dir = nothing
     newpd = if n == 1
-        gen_ref(32)
+        Toolips.gen_ref(32)
     else
         args[2]
     end
     @warn "WROTE $(newname)"
     new_dbkey = Toolips.gen_ref(32)
     open(userd, "a") do o::IOStream
-        write(o, newname)
+        write(o, "\n" * newname)
     end
     newpd = sha256(newpd)
-    crypt_pwd = String(encrypt(DB_EXTENSION.enc, newpd))
+    crypt_pwd = encrypt(DB_EXTENSION.enc, newpd)
     open(secretd, "a") do o::IOStream
-        write(o, crypt_pwd * "DIV" * new_dbkey * "!EOF")
+        write(o, base64encode(crypt_pwd) * "DIV" * new_dbkey * "!EOF")
     end
+    new_curs = DBUser(newname, String(newpd), new_dbkey, "", "")
+    push!(DB_EXTENSION.cursors, new_curs)
     return(0, "$(newname)!;$(newpd)!;$(new_dbkey)")
 end
 # delete user

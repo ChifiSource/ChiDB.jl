@@ -154,7 +154,7 @@ function setup_dbdir(db::DeeBee, dir::Bool = false)
     end
     open(secrets_dir, "w") do o::IOStream
         write(o, 
-            encrypt(db.enc, sha256(admin_ref)), 
+            base64encode(encrypt(db.enc, sha256(admin_ref))), 
             "DIV" * admin_keyenc * "!EOF")
     end
     @info "ChiDB server started for the first time at $(db.dir)"
@@ -170,7 +170,7 @@ function load_db!(db::DeeBee)
         setup_dbdir(db)
     end
     hmac = read(db.dir * "/db/key.pem", String)
-    usernames = readlines(db.dir * "/db/users.txt")
+    usernames = filter!(x -> x != "", readlines(db.dir * "/db/users.txt"))
     wds = split(read(db.dir * "/db/secrets.txt", String), "!EOF")
     for usere in 1:length(usernames)
         pwd_key = split(wds[usere], "DIV")
@@ -239,11 +239,10 @@ verify = handler() do c::Toolips.SocketConnection
             return
         end
         @warn "got past usere"
+        try
         selected_user = cursors[usere]
         user_pwd = decrypt(c[:DB].dec, selected_user.pwd)
-        pwdval = pwd[1:end - 1]
-        @warn pwdval
-        incoming_pwd = sha256(pwdval)
+        incoming_pwd = sha256(pwd)
         if ~(user_pwd == incoming_pwd)
             @warn "password denied"
             @warn user_pwd
@@ -252,6 +251,16 @@ verify = handler() do c::Toolips.SocketConnection
             write!(c, "$(Char(parse(UInt8, header, base = 2)))\n")
             return
         end
+    catch e
+            io = IOBuffer()
+            showerror(io, e)
+            msg = String(take!(io))
+            @warn "Caught Exception" exception_type=typeof(e) message=msg
+            	@warn "Stacktrace:"
+	        for (i, frame) in enumerate(stacktrace(catch_backtrace()))
+		        @warn "$i: $frame"
+	        end
+    end
         @warn "finished pwd check"
         if db_key != selected_user.key
             @warn "invalid dbkey return"

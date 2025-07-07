@@ -1,7 +1,11 @@
+using Pkg
+
+SRCDIR = @__DIR__
+Pkg.activate(SRCDIR)
 using ChiDB
 using ChiDB.Toolips
 using Test
-SRCDIR = @__DIR__
+
 const ext = ChiDB.DB_EXTENSION
 #==
 testdb info
@@ -12,6 +16,9 @@ wztycvtmqqkqjrba
 username:
 admin
 ==#
+testpass = "cznegaiflitqsohy"
+testkey = "zuiqqoqucoiacwywyfuacwexayszqofi"
+
 testdb_dir = SRCDIR * "/testdb"
 curr_dir = readdir(testdb_dir)
 if length(curr_dir) > 4
@@ -96,7 +103,7 @@ curr_dir = nothing
     @testset "login" begin
         @info "performing login"
         # success   
-        write!(sock, "aShjqyoktipaporlrzepcdaouwtysqtjch admin wztycvtmqqkqjrba\n")
+        write!(sock, "aS$testkey admin $testpass\n")
         @warn "completed write"
         resp = String(readavailable(sock))
         @warn "completed read"
@@ -422,9 +429,43 @@ curr_dir = nothing
         end
     end
     @testset "server command queries" verbose = true begin
+        @testset "U" begin
+            write!(sock, "$(curr_header)U\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            curr_header = Char(UInt8(resp[1]))
+            @test opcode == "0001"
+            @test contains(resp, "admin")
+        end
+        uname, pwd, dbkey = ("emma", nothing, nothing)
+        @testset "C" begin
+            write!(sock, "$(curr_header)Cemma\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            curr_header = Char(UInt8(resp[1]))
+            @test opcode == "0001"
+            @test "emma" in [curs.username for curs in ChiDB.DB_EXTENSION.cursors]
+            @test "emma" in readlines(DB_EXTENSION.dir * "/db/users.txt")
+        end
+        @testset "K" begin
+
+        end
+        @testset "U2" begin
+
+        end
+        @testset "L" begin
+
+        end
+        @testset "new login" begin
+
+        end
+    end
+    @testset "kill" begin
 
     end
-    @testset "broken queries" verbose = true begin
+    @testset "reload users" begin
 
     end
 end
