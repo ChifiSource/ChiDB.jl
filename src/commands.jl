@@ -522,22 +522,30 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:d}}, args::Abstract
     if n != 2
         return(2, "deleteat requires two arguments")
     end
-    table, col = get_selected_col(user, args[1])
-    if typeof(table) == Int64
-        return(table, col)
-    end
     ind = nothing
+    table = string(args[1])
+    tablelen = length(DB_EXTENSION.tables[table])
     try
         ind = if contains(args[2], ":")
             splts = split(args[2], ":")
-            parse(Int64, splts[1]):parse(Int64, splts[2])
+            val = parse(Int64, splts[1]):parse(Int64, splts[2])
+            if minimum(val) < 1
+                return(2, "range must start above 0")
+            elseif maximum(val) > tablelen
+                return(2, "requested index $(val) greater than table length $tablelen")
+            end
+            val
         else
-            parse(Int64, args[2])
+            val = parse(Int64, args[2])
+            if val > tablelen || val < 0
+                return(2, "index error: row $(val) with table length $tablelen")
+            end
+            val
         end
     catch
         return(2, "failed to parse index or range for deletion.")
     end
-    deleteat!(DB_EXTENSION.tables[table][col], ind)
+    deleteat!(DB_EXTENSION.tables[table], ind)
     return(0, "")
 end
 

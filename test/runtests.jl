@@ -358,7 +358,16 @@ curr_dir = nothing
             @test sel_tab.T[axis] <: AbstractString
         end
         @testset "deleteat (d)" begin
-
+            write!(sock, "$(curr_header)dnewt|!|2\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            curr_header = Char(UInt8(resp[1]))
+            @test opcode == "0001"
+            sel_tab = ChiDB.DB_EXTENSION.tables["newt"]
+            @test length(sel_tab) == 1
+            @test length(sel_tab["name"]) == 1
+            @test ~("sample2" in sel_tab["name"])
         end
         @testset "delete (z)" begin
             # (quick query to create a table/col to delete)
@@ -411,6 +420,9 @@ curr_dir = nothing
             @test ~("main" in tabns)
             @test ChiDB.DB_EXTENSION.tables["newt"]["count"][1] == "1"
         end
+    end
+    @testset "server command queries" verbose = true begin
+
     end
     @testset "broken queries" verbose = true begin
 
