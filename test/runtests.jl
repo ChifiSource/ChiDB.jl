@@ -23,6 +23,9 @@ if length(curr_dir) > 4
         end
         rm(testdb_dir * "/" * dir, force = true, recursive = true)
     end
+    open(testdb_dir * "/tab1/col1.ff", "w") do o::IOStream
+        write(o, """Integer""")
+    end
 end
 
 curr_dir = nothing
@@ -324,21 +327,7 @@ curr_dir = nothing
             curr_header = Char(UInt8(resp[1]))
             @test opcode == "0001"
             @test ChiDB.DB_EXTENSION.tables["newt"]["main"][1] == 1
-        end
-        @testset "type (k)" begin
-
-        end
-        @testset "rename (e)" begin
-
-        end
-        @testset "deleteat (d)" begin
-
-        end
-        @testset "delete (z)" begin
-
-        end
-        @testset "compare (p)" begin
-
+            @test ChiDB.DB_EXTENSION.tables["tab1"]["col1"][1] == 3
         end
         @testset "in (n)" begin
             write!(sock, "$(curr_header)nnewt/name|!|sample2\n")
@@ -356,6 +345,30 @@ curr_dir = nothing
             curr_header = Char(UInt8(resp[1]))
             @test opcode == "0001"
             @test contains(resp[3:end], "0")
+        end
+        @testset "type (k)" begin
+
+        end
+        @testset "deleteat (d)" begin
+
+        end
+        @testset "delete (z)" begin
+
+        end
+        @testset "compare (p)" begin
+
+        end
+        @testset "rename (e)" begin
+            write!(sock, "$(curr_header)enewt/main|!|count\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            curr_header = Char(UInt8(resp[1]))
+            @test opcode == "0001"
+            tabns = names(ChiDB.DB_EXTENSION.tables["newt"])
+            @test "count" in tabns
+            @test ~("main" in tabns)
+            @test ChiDB.DB_EXTENSION.tables["newt"]["count"][1] == 1
         end
     end
     @testset "broken queries" verbose = true begin

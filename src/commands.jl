@@ -493,9 +493,23 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:e}}, args::Abstract
     end
     pos = findfirst(x -> x == col, sel_table.names)
     sel_table.names[pos] = string(args[2])
+    T = sel_table.T[pos]
     new_fpath = DB_EXTENSION.dir * "/$table/$(args[2]).ff"
     mv(sel_table.paths[col], new_fpath)
     sel_table.paths[col] = new_fpath
+    sel_table.gen[pos] = if T <: AbstractString
+        e::Int64 -> begin
+                lines = filter!(x -> AlgebraStreamFrames.is_emptystr(x), 
+                    readlines(new_fpath))
+            lines[e + 1]
+        end
+    else
+        e::Int64 -> begin
+            lines = filter!(x -> AlgebraStreamFrames.is_emptystr(x), 
+                    readlines(new_fpath))
+            parse(T, lines[e + 1])
+        end
+    end
     return(0, "column renamed")
 end
 
