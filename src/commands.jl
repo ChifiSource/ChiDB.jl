@@ -6,7 +6,7 @@ U - list users
 C - create user
 K - set
 L - logout
-
+D - remove
 # query
 #  table management
 l - list
@@ -613,7 +613,7 @@ end
 
 # list users
 function perform_command!(user::DBUser, cmd::Type{DBCommand{:U}}, args::AbstractString ...)
-    return(0, join((user.username for user in DB_EXTENSION.users), "\n"))
+    return(0, join((user.username for user in DB_EXTENSION.cursors), "!;"))
 end
 
 # create user
@@ -623,13 +623,57 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:C}}, args::Abstract
         return(1, "the create user command takes a username and optionally a password.")
     end
     newname = args[1]
+    db_dir = DB_EXTENSION.dir * "/db/"
+    userd = db_dir * "users.txt"
+    secretd = db_dir * "secrets.txt"
+    db_dir = nothing
     newpd = if n == 1
         gen_ref(32)
     else
         args[2]
     end
+    @warn "WROTE $(newname)"
     new_dbkey = Toolips.gen_ref(32)
+    open(userd, "a") do o::IOStream
+        write(o, newname)
+    end
+    newpd = sha256(newpd)
+    crypt_pwd = String(encrypt(DB_EXTENSION.enc, newpd))
+    open(secretd, "a") do o::IOStream
+        write(o, crypt_pwd * "DIV" * new_dbkey * "!EOF")
+    end
     return(0, "$(newname)!;$(newpd)!;$(new_dbkey)")
+end
+# delete user
+function perform_command!(user::DBUser, cmd::Type{DBCommand{:D}}, args::AbstractString ...)
+    if ~(length(args) == 1)
+        return(2, "delete user only takes one argument, the user's name to delete.")
+    end
+    selected_name = args[1]
+    if selected_name == "admin"
+        return(2, "cannot delete 'admin'")
+    end
+    db_dir = DB_EXTENSION.dir * "/db/"
+    userd = db_dir * "users.txt"
+    secretd = db_dir * "secrets.txt"
+    db_dir = nothing
+    user_names = readlines(userd)
+    user_secrets = split(read(userd, String), "!EOF")
+    found = findfirst(x -> x == selected_name, user_names)
+    if isnothing(found)
+        return(2, "user $selected_name not found")
+    end
+    deleteat!(user_names, found)
+    deleteat!(user_secrets, found)
+    open(userd, "w") do o::IOStream
+        write(o, join(user_names, "\n"))
+    end
+    open(secretd, "w") do o::IOStream
+        write(o, join(user_secrets, "EOF!"))
+    end
+    curspos = findfirst(x -> x.username == selected_name, DB_EXTENSION.cursors)
+    deleteat!(DB_EXTENSION.cursors, curspos)
+    return(0, string(args[1]))
 end
 
 # set

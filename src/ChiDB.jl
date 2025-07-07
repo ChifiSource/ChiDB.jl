@@ -5,6 +5,8 @@ import Base: parse
 using AlgebraStreamFrames
 import AlgebraStreamFrames: get_datatype, StreamDataType
 using Nettle
+using SHA
+using Base64
 #=== header
 #==
 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16
@@ -151,7 +153,9 @@ function setup_dbdir(db::DeeBee, dir::Bool = false)
         write(o, "admin")
     end
     open(secrets_dir, "w") do o::IOStream
-        write(o, String(encrypt(db.enc, add_padding_PKCS5(Vector{UInt8}(admin_ref), 16))) * "DIV" * admin_keyenc * "!EOF")
+        write(o, 
+            encrypt(db.enc, sha256(admin_ref)), 
+            "DIV" * admin_keyenc * "!EOF")
     end
     @info "ChiDB server started for the first time at $(db.dir)"
     @info "admin login: ($admin_keyenc) admin $admin_ref"
@@ -229,18 +233,30 @@ verify = handler() do c::Toolips.SocketConnection
         cursors = c[:DB].cursors
         usere = findfirst(u -> u.username == user, cursors)
         if isnothing(usere)
+            @warn "invalid user"
             header = "1100" * make_transaction_id()
             write!(c, "$(Char(parse(UInt8, header, base = 2)))\n")
             return
         end
+        @warn "got past usere"
         selected_user = cursors[usere]
-        if ~(pwd[1:end - 1] == String(trim_padding_PKCS5(decrypt(c[:DB].dec, selected_user.pwd))))
+        user_pwd = decrypt(c[:DB].dec, selected_user.pwd)
+        pwdval = pwd[1:end - 1]
+        @warn pwdval
+        incoming_pwd = sha256(pwdval)
+        if ~(user_pwd == incoming_pwd)
+            @warn "password denied"
+            @warn user_pwd
+            @warn incoming_pwd
             header = "1100" * make_transaction_id()
             write!(c, "$(Char(parse(UInt8, header, base = 2)))\n")
             return
         end
+        @warn "finished pwd check"
         if db_key != selected_user.key
             @warn "invalid dbkey return"
+            @warn db_key
+            @warn selected_user.key
             header = "1001" * make_transaction_id()
             write!(c, "$(Char(parse(UInt8, header, base = 2)))\n")
             return
