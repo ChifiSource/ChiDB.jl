@@ -238,15 +238,12 @@ verify = handler() do c::Toolips.SocketConnection
             write!(c, "$(Char(parse(UInt8, header, base = 2)))\n")
             return
         end
-        @warn "got past usere"
         try
         selected_user = cursors[usere]
         user_pwd = decrypt(c[:DB].dec, selected_user.pwd)
         incoming_pwd = sha256(pwd)
         if ~(user_pwd == incoming_pwd)
             @warn "password denied"
-            @warn user_pwd
-            @warn incoming_pwd
             header = "1100" * make_transaction_id()
             write!(c, "$(Char(parse(UInt8, header, base = 2)))\n")
             return
@@ -397,6 +394,18 @@ function start(path::String, ip::IP4 = "127.0.0.1":8005; async::Bool = false)
     @info "this version is primarily being used for testing, at the moment. This project is a work-in-progress."
     DB_EXTENSION.dir = path
     start!(:TCP, ChiDB, ip, async = async)
+end
+
+function kill()
+    dump_transactions!(DB_EXTENSION)
+    kill!(ChiDB)
+    DB_EXTENSION.dir = ""
+    DB_EXTENSION.tables = Dict{String, StreamFrame}()
+    DB_EXTENSION.transaction_ids = Dict{IP4, String}()
+    DB_EXTENSION.refinfo = Dict{String, Vector{String}}()
+    DB_EXTENSION.cursors = Vector{DBUser}()
+    GC.gc(true)
+    nothing::Nothing
 end
 
 export DB_EXTENSION, verify

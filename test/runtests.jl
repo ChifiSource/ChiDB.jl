@@ -104,9 +104,7 @@ curr_dir = nothing
         @info "performing login"
         # success   
         write!(sock, "aS$testkey admin $testpass\n")
-        @warn "completed write"
         resp = String(readavailable(sock))
-        @warn "completed read"
         header = bitstring(UInt8(resp[1]))
         opcode = header[1:4]
         @test opcode == "0001"
@@ -132,7 +130,12 @@ curr_dir = nothing
     @testset "queries" verbose = true begin
         @info "performing queries"
         @testset "command error" begin
-
+            write!(sock, "$(curr_header)M\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            @test opcode == "1110"
+            curr_header = Char(UInt8(resp[1]))
         end
         @testset "list (l)" begin
             write!(sock, "$(curr_header)l\n")
@@ -450,22 +453,54 @@ curr_dir = nothing
             @test "emma" in readlines(DB_EXTENSION.dir * "/db/users.txt")
         end
         @testset "K" begin
-
+            write!(sock, "$(curr_header)Kemma|!|jennifer|!|123\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            curr_header = Char(UInt8(resp[1]))
+            leins = readlines(DB_EXTENSION.dir * "/db/users.txt")
+            unames = [curs.username for curs in ChiDB.DB_EXTENSION.cursors]
+            @test "jennifer" in unames
+            @test "jennifer" in leins
+            @test ~("emma" in unames)
+            @test ~("emma" in leins)
         end
         @testset "U2" begin
-
+            write!(sock, "$(curr_header)U\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            curr_header = Char(UInt8(resp[1]))
+            @test opcode == "0001"
+            @test length(split(resp, "!;")) == 2
+            @test contains(resp, "jennifer")
+            @test contains(resp, "admin")
+        end
+        @testset "D" begin
+            write!(sock, "$(curr_header)Djennifer\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            curr_header = Char(UInt8(resp[1]))
+            @test opcode == "0001"
+            @test ~("jennifer" in [curs.username for curs in ChiDB.DB_EXTENSION.cursors])
+            @test ~("jennifer" in readlines(DB_EXTENSION.dir * "/db/users.txt"))
         end
         @testset "L" begin
-
-        end
-        @testset "new login" begin
-
+            write!(sock, "$(curr_header)L\n")
+            @test eof(sock)
+            @test ChiDB.DB_EXTENSION.users["admin"].table == ""
         end
     end
     @testset "kill" begin
-
-    end
-    @testset "reload users" begin
-
+        ChiDB.kill()
+        server_dead = try
+            sock = Toolips.connect("127.0.0.1":8005)
+            false
+        catch
+            true
+        end
+        @test ChiDB.DB_EXTENSION.dir == ""
+        @test server_dead
     end
 end
