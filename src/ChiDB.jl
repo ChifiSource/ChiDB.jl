@@ -5,6 +5,10 @@ import Base: parse
 using AlgebraStreamFrames
 import AlgebraStreamFrames: get_datatype, StreamDataType
 using Nettle
+using SHA
+using Base64
+import Base: close
+
 #=== header
 #==
 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16
@@ -55,7 +59,7 @@ struct Transaction
     username::String
 end
 
-string(ts::Transaction) = "$(ts.id)|$(ts.username): $(ts.cmd) ; $(operands)\n"
+string(ts::Transaction) = "$(ts.id)|$(ts.username): $(ts.cmd) ; $(ts.operands)\n"
 
 mutable struct DeeBee <: Toolips.SocketServerExtension
     dir::String
@@ -151,7 +155,9 @@ function setup_dbdir(db::DeeBee, dir::Bool = false)
         write(o, "admin")
     end
     open(secrets_dir, "w") do o::IOStream
-        write(o, String(encrypt(db.enc, add_padding_PKCS5(Vector{UInt8}(admin_ref), 16))) * "DIV" * admin_keyenc * "!EOF")
+        write(o, 
+            base64encode(encrypt(db.enc, sha256(admin_ref))), 
+            "DIV" * admin_keyenc * "!EOF")
     end
     @info "ChiDB server started for the first time at $(db.dir)"
     @info "admin login: ($admin_keyenc) admin $admin_ref"
@@ -166,7 +172,7 @@ function load_db!(db::DeeBee)
         setup_dbdir(db)
     end
     hmac = read(db.dir * "/db/key.pem", String)
-    usernames = readlines(db.dir * "/db/users.txt")
+    usernames = filter!(x -> x != "", readlines(db.dir * "/db/users.txt"))
     wds = split(read(db.dir * "/db/secrets.txt", String), "!EOF")
     for usere in 1:length(usernames)
         pwd_key = split(wds[usere], "DIV")
@@ -229,18 +235,36 @@ verify = handler() do c::Toolips.SocketConnection
         cursors = c[:DB].cursors
         usere = findfirst(u -> u.username == user, cursors)
         if isnothing(usere)
+            @warn "invalid user"
             header = "1100" * make_transaction_id()
             write!(c, "$(Char(parse(UInt8, header, base = 2)))\n")
             return
         end
+        try
         selected_user = cursors[usere]
-        if ~(pwd[1:end - 1] == String(trim_padding_PKCS5(decrypt(c[:DB].dec, selected_user.pwd))))
+        user_pwd = decrypt(c[:DB].dec, selected_user.pwd)
+        incoming_pwd = sha256(pwd)
+        if ~(user_pwd == incoming_pwd)
+            @warn "password denied"
             header = "1100" * make_transaction_id()
             write!(c, "$(Char(parse(UInt8, header, base = 2)))\n")
             return
         end
+    catch e
+            io = IOBuffer()
+            showerror(io, e)
+            msg = String(take!(io))
+            @warn "Caught Exception" exception_type=typeof(e) message=msg
+            	@warn "Stacktrace:"
+	        for (i, frame) in enumerate(stacktrace(catch_backtrace()))
+		        @warn "$i: $frame"
+	        end
+    end
+        @warn "finished pwd check"
         if db_key != selected_user.key
             @warn "invalid dbkey return"
+            @warn db_key
+            @warn selected_user.key
             header = "1001" * make_transaction_id()
             write!(c, "$(Char(parse(UInt8, header, base = 2)))\n")
             return
@@ -347,6 +371,9 @@ verify = handler() do c::Toolips.SocketConnection
             # argument error
             header = "1010" * trans_id
         elseif success == 4
+            header = "0001" * trans_id
+            write!("$(Char(parse(UInt8, header, base = 2)))%" * "goodbye!")
+            close(c.stream)
             break
         end
         write!(c, "$(Char(parse(UInt8, header, base = 2)))%" * output * "\n")
@@ -372,6 +399,18 @@ function start(path::String, ip::IP4 = "127.0.0.1":8005; async::Bool = false)
     @info "this version is primarily being used for testing, at the moment. This project is a work-in-progress."
     DB_EXTENSION.dir = path
     start!(:TCP, ChiDB, ip, async = async)
+end
+
+function kill()
+    dump_transactions!(DB_EXTENSION)
+    kill!(ChiDB)
+    DB_EXTENSION.dir = ""
+    DB_EXTENSION.tables = Dict{String, StreamFrame}()
+    DB_EXTENSION.transaction_ids = Dict{IP4, String}()
+    DB_EXTENSION.refinfo = Dict{String, Vector{String}}()
+    DB_EXTENSION.cursors = Vector{DBUser}()
+    GC.gc(true)
+    nothing::Nothing
 end
 
 export DB_EXTENSION, verify

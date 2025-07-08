@@ -6,7 +6,7 @@ U - list users
 C - create user
 K - set
 L - logout
-
+D - rmuser
 # query
 #  table management
 l - list
@@ -522,22 +522,30 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:d}}, args::Abstract
     if n != 2
         return(2, "deleteat requires two arguments")
     end
-    table, col = get_selected_col(user, args[1])
-    if typeof(table) == Int64
-        return(table, col)
-    end
     ind = nothing
+    table = string(args[1])
+    tablelen = length(DB_EXTENSION.tables[table])
     try
         ind = if contains(args[2], ":")
             splts = split(args[2], ":")
-            parse(Int64, splts[1]):parse(Int64, splts[2])
+            val = parse(Int64, splts[1]):parse(Int64, splts[2])
+            if minimum(val) < 1
+                return(2, "range must start above 0")
+            elseif maximum(val) > tablelen
+                return(2, "requested index $(val) greater than table length $tablelen")
+            end
+            val
         else
-            parse(Int64, args[2])
+            val = parse(Int64, args[2])
+            if val > tablelen || val < 0
+                return(2, "index error: row $(val) with table length $tablelen")
+            end
+            val
         end
     catch
         return(2, "failed to parse index or range for deletion.")
     end
-    deleteat!(DB_EXTENSION.tables[table][col], ind)
+    deleteat!(DB_EXTENSION.tables[table], ind)
     return(0, "")
 end
 
@@ -605,7 +613,7 @@ end
 
 # list users
 function perform_command!(user::DBUser, cmd::Type{DBCommand{:U}}, args::AbstractString ...)
-    return(0, join((user.username for user in DB_EXTENSION.users), "\n"))
+    return(0, join((user.username for user in DB_EXTENSION.cursors), "!;"))
 end
 
 # create user
@@ -615,37 +623,110 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:C}}, args::Abstract
         return(1, "the create user command takes a username and optionally a password.")
     end
     newname = args[1]
+    userlist = [user.username for user in DB_EXTENSION.cursors]
+    if newname in userlist
+        return(2, "$newname already exists!")
+    end
+    db_dir = DB_EXTENSION.dir * "/db/"
+    userd = db_dir * "users.txt"
+    secretd = db_dir * "secrets.txt"
+    db_dir = nothing
     newpd = if n == 1
-        gen_ref(32)
+        Toolips.gen_ref(32)
     else
         args[2]
     end
+    @warn "WROTE $(newname)"
     new_dbkey = Toolips.gen_ref(32)
+    open(userd, "a") do o::IOStream
+        write(o, "\n" * newname)
+    end
+    newpd = sha256(newpd)
+    crypt_pwd = encrypt(DB_EXTENSION.enc, newpd)
+    open(secretd, "a") do o::IOStream
+        write(o, base64encode(crypt_pwd) * "DIV" * new_dbkey * "!EOF")
+    end
+    new_curs = DBUser(newname, String(newpd), new_dbkey, "", "")
+    push!(DB_EXTENSION.cursors, new_curs)
     return(0, "$(newname)!;$(newpd)!;$(new_dbkey)")
+end
+# delete user
+function perform_command!(user::DBUser, cmd::Type{DBCommand{:D}}, args::AbstractString ...)
+    if ~(length(args) == 1)
+        return(2, "delete user only takes one argument, the user's name to delete.")
+    end
+    selected_name = args[1]
+    if selected_name == "admin"
+        return(2, "cannot delete 'admin'")
+    end
+    db_dir = DB_EXTENSION.dir * "/db/"
+    userd = db_dir * "users.txt"
+    secretd = db_dir * "secrets.txt"
+    db_dir = nothing
+    curspos = findfirst(x -> x.username == selected_name, DB_EXTENSION.cursors)
+    curs = DB_EXTENSION.cursors[curspos]
+    user_names = readlines(userd)
+    user_secrets = split(read(secretd, String), "!EOF")
+    found = findfirst(x -> x == selected_name, user_names)
+    secret_found = findfirst(x -> contains(x, curs.key), user_secrets)
+    if isnothing(found)
+        return(2, "user $selected_name not found")
+    end
+    deleteat!(user_names, found)
+    deleteat!(user_secrets, secret_found)
+    open(userd, "w") do o::IOStream
+        write(o, join(user_names, "\n"))
+    end
+    open(secretd, "w") do o::IOStream
+        write(o, join(user_secrets, "!EOF"))
+    end
+    deleteat!(DB_EXTENSION.cursors, curspos)
+    return(0, string(args[1]))
 end
 
 # set
 function perform_command!(user::DBUser, cmd::Type{DBCommand{:K}}, args::AbstractString ...)
-    if ~(user.username) == "admin"
+    if ~(user.username == "admin")
         return(1, "cannot perform 'userset' unless you are 'admin'.")
     end
     n = length(args)
     if ~(n in (2, 3))
         return(2, "'set' takes at most 3 arguments, at minimum 2 (user, name, pwd)")
     end
-    index = findfirst(usr -> usr.username == args[1], DB_EXTENSION.users)
+    index = findfirst(usr -> usr.username == args[1], DB_EXTENSION.cursors)
     if isnothing(index)
         return(2, "user $(args[1]) not found")
     end
-    this_user = DB_EXTENSION.users[index]
-    this_user.username = strings(arg[2])
-    this_user.pwd = encrypt(DB_EXTENSION.enc, Nettle.add_padding_PKCS5(Vector{UInt8}(args[3]), 16))
-    this_user.key = gen_ref(32)
+    allnames = [user.username for user in DB_EXTENSION.cursors]
+    if args[1] != args[2] && args[2] in allnames
+        return(2, "cannot set name, name already taken.")
+    end
+    this_user = DB_EXTENSION.cursors[index]
+    this_user.username = string(args[2])
+    new_pwd = base64encode(encrypt(DB_EXTENSION.enc, sha256(args[3])))
+    this_user.pwd = new_pwd
+    this_user.key = Toolips.gen_ref(32)
+    userdirec = DB_EXTENSION.dir * "/db/users.txt"
+    usrs = filter!(x -> AlgebraStreamFrames.is_emptystr(x), 
+        readlines(userdirec))
+    usrs[index] = this_user.username
+    open(userdirec, "w") do o::IOStream
+        write(o, join(usrs, "\n"))
+    end
+    usrs = nothing
+    userdirec = nothing
+    secrets_direc = DB_EXTENSION.dir * "/db/secrets.txt"
+    pwdsplts = split(read(secrets_direc, String), "!EOF")
+    pwdsplts[index] = "$(new_pwd)DIV$(this_user.key)"
+    open(secrets_direc, "w") do o::IOStream
+        write(o, join(pwdsplts, "!EOF"))
+    end
+    @warn this_user
     return(0, "$(this_user.username)!;$(args[2])!;$(this_user.key)")
 end
 # logout
 function perform_command!(user::DBUser, cmd::Type{DBCommand{:L}}, args::AbstractString ...)
-    user.selected_table = ""
+    user.table = ""
     return(4, "")
 end
 

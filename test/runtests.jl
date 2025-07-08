@@ -1,7 +1,11 @@
+using Pkg
+
+SRCDIR = @__DIR__
+Pkg.activate(SRCDIR)
 using ChiDB
 using ChiDB.Toolips
 using Test
-SRCDIR = @__DIR__
+
 const ext = ChiDB.DB_EXTENSION
 #==
 testdb info
@@ -12,6 +16,9 @@ wztycvtmqqkqjrba
 username:
 admin
 ==#
+testpass = "cznegaiflitqsohy"
+testkey = "zuiqqoqucoiacwywyfuacwexayszqofi"
+
 testdb_dir = SRCDIR * "/testdb"
 curr_dir = readdir(testdb_dir)
 if length(curr_dir) > 4
@@ -96,10 +103,8 @@ curr_dir = nothing
     @testset "login" begin
         @info "performing login"
         # success   
-        write!(sock, "aShjqyoktipaporlrzepcdaouwtysqtjch admin wztycvtmqqkqjrba\n")
-        @warn "completed write"
+        write!(sock, "aS$testkey admin $testpass\n")
         resp = String(readavailable(sock))
-        @warn "completed read"
         header = bitstring(UInt8(resp[1]))
         opcode = header[1:4]
         @test opcode == "0001"
@@ -125,7 +130,12 @@ curr_dir = nothing
     @testset "queries" verbose = true begin
         @info "performing queries"
         @testset "command error" begin
-
+            write!(sock, "$(curr_header)M\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            @test opcode == "1110"
+            curr_header = Char(UInt8(resp[1]))
         end
         @testset "list (l)" begin
             write!(sock, "$(curr_header)l\n")
@@ -358,7 +368,16 @@ curr_dir = nothing
             @test sel_tab.T[axis] <: AbstractString
         end
         @testset "deleteat (d)" begin
-
+            write!(sock, "$(curr_header)dnewt|!|2\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            curr_header = Char(UInt8(resp[1]))
+            @test opcode == "0001"
+            sel_tab = ChiDB.DB_EXTENSION.tables["newt"]
+            @test length(sel_tab) == 1
+            @test length(sel_tab["name"]) == 1
+            @test ~("sample2" in sel_tab["name"])
         end
         @testset "delete (z)" begin
             # (quick query to create a table/col to delete)
@@ -412,7 +431,65 @@ curr_dir = nothing
             @test ChiDB.DB_EXTENSION.tables["newt"]["count"][1] == "1"
         end
     end
-    @testset "broken queries" verbose = true begin
-
+    @testset "server command queries" verbose = true begin
+        @testset "U" begin
+            write!(sock, "$(curr_header)U\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            curr_header = Char(UInt8(resp[1]))
+            @test opcode == "0001"
+            @test contains(resp, "admin")
+        end
+        uname, pwd, dbkey = ("emma", nothing, nothing)
+        @testset "C" begin
+            write!(sock, "$(curr_header)Cemma\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            curr_header = Char(UInt8(resp[1]))
+            @test opcode == "0001"
+            @test "emma" in [curs.username for curs in ChiDB.DB_EXTENSION.cursors]
+            @test "emma" in readlines(DB_EXTENSION.dir * "/db/users.txt")
+        end
+        @testset "K" begin
+            write!(sock, "$(curr_header)Kemma|!|jennifer|!|123\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            curr_header = Char(UInt8(resp[1]))
+            leins = readlines(DB_EXTENSION.dir * "/db/users.txt")
+            unames = [curs.username for curs in ChiDB.DB_EXTENSION.cursors]
+            @test "jennifer" in unames
+            @test "jennifer" in leins
+            @test ~("emma" in unames)
+            @test ~("emma" in leins)
+        end
+        @testset "U2" begin
+            write!(sock, "$(curr_header)U\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            curr_header = Char(UInt8(resp[1]))
+            @test opcode == "0001"
+            @test length(split(resp, "!;")) == 2
+            @test contains(resp, "jennifer")
+            @test contains(resp, "admin")
+        end
+        @testset "D" begin
+            write!(sock, "$(curr_header)Djennifer\n")
+            resp = String(readavailable(sock))
+            header = bitstring(UInt8(resp[1]))
+            opcode = header[1:4]
+            curr_header = Char(UInt8(resp[1]))
+            @test opcode == "0001"
+            @test ~("jennifer" in [curs.username for curs in ChiDB.DB_EXTENSION.cursors])
+            @test ~("jennifer" in readlines(DB_EXTENSION.dir * "/db/users.txt"))
+        end
+        @testset "L" begin
+            write!(sock, "$(curr_header)L\n")
+            @test eof(sock)
+            @test ChiDB.DB_EXTENSION.cursors[1].table == ""
+        end
     end
 end
