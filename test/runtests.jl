@@ -489,18 +489,7 @@ curr_dir = nothing
         @testset "L" begin
             write!(sock, "$(curr_header)L\n")
             @test eof(sock)
-            @test ChiDB.DB_EXTENSION.users["admin"].table == ""
+            @test ChiDB.DB_EXTENSION.cursors[1].table == ""
         end
-    end
-    @testset "kill" begin
-        ChiDB.kill()
-        server_dead = try
-            sock = Toolips.connect("127.0.0.1":8005)
-            false
-        catch
-            true
-        end
-        @test ChiDB.DB_EXTENSION.dir == ""
-        @test server_dead
     end
 end

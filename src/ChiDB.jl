@@ -7,6 +7,8 @@ import AlgebraStreamFrames: get_datatype, StreamDataType
 using Nettle
 using SHA
 using Base64
+import Base: close
+
 #=== header
 #==
 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16
@@ -57,7 +59,7 @@ struct Transaction
     username::String
 end
 
-string(ts::Transaction) = "$(ts.id)|$(ts.username): $(ts.cmd) ; $(operands)\n"
+string(ts::Transaction) = "$(ts.id)|$(ts.username): $(ts.cmd) ; $(ts.operands)\n"
 
 mutable struct DeeBee <: Toolips.SocketServerExtension
     dir::String
@@ -369,6 +371,9 @@ verify = handler() do c::Toolips.SocketConnection
             # argument error
             header = "1010" * trans_id
         elseif success == 4
+            header = "0001" * trans_id
+            write!("$(Char(parse(UInt8, header, base = 2)))%" * "goodbye!")
+            close(c.stream)
             break
         end
         write!(c, "$(Char(parse(UInt8, header, base = 2)))%" * output * "\n")

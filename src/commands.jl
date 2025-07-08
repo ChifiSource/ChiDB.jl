@@ -666,7 +666,7 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:D}}, args::Abstract
     curspos = findfirst(x -> x.username == selected_name, DB_EXTENSION.cursors)
     curs = DB_EXTENSION.cursors[curspos]
     user_names = readlines(userd)
-    user_secrets = split(read(userd, String), "!EOF")
+    user_secrets = split(read(secretd, String), "!EOF")
     found = findfirst(x -> x == selected_name, user_names)
     secret_found = findfirst(x -> contains(x, curs.key), user_secrets)
     if isnothing(found)
@@ -678,7 +678,7 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:D}}, args::Abstract
         write(o, join(user_names, "\n"))
     end
     open(secretd, "w") do o::IOStream
-        write(o, join(user_secrets, "EOF!"))
+        write(o, join(user_secrets, "!EOF"))
     end
     deleteat!(DB_EXTENSION.cursors, curspos)
     return(0, string(args[1]))
@@ -721,11 +721,12 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:K}}, args::Abstract
     open(secrets_direc, "w") do o::IOStream
         write(o, join(pwdsplts, "!EOF"))
     end
+    @warn this_user
     return(0, "$(this_user.username)!;$(args[2])!;$(this_user.key)")
 end
 # logout
 function perform_command!(user::DBUser, cmd::Type{DBCommand{:L}}, args::AbstractString ...)
-    user.selected_table = ""
+    user.table = ""
     return(4, "")
 end
 
