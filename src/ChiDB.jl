@@ -243,7 +243,7 @@ verify = handler() do c::Toolips.SocketConnection
         end
         try
         selected_user = cursors[usere]
-        user_pwd = decrypt(c[:DB].dec, selected_user.pwd)
+        user_pwd = decrypt(c[:DB].dec, base64decode(selected_user.pwd))
         incoming_pwd = sha256(pwd)
         if ~(user_pwd == incoming_pwd)
             @warn "password denied"
