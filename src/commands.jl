@@ -379,7 +379,11 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:j}}, args::Abstract
             colname = string(splts[2])
             table = string(splts[1])
         else
-            table = string(args[1])
+            if user.table == ""
+                return(2, "no table provided to join to")
+            end
+            colname = string(args[1])
+            table = user.table
         end
         T = args[2]
         # reference join?

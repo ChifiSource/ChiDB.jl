@@ -46,7 +46,7 @@ struct DBCommand{T} <: AbstractDBCommand end
 
 mutable struct DBUser
     username::String
-    pwd::String
+    pwd::Vector{UInt8}
     key::String
     transaction_id::String
     table::String
@@ -114,7 +114,6 @@ load_schema!(db::DeeBee) = begin
             colname = namesplits[2]
             framename = namesplits[1]
             join!(this_frame, string(colname) => T) do e
-                @warn "ref issue?"
                 db.tables[framename][colname][e]
             end
             push!(db.refinfo[path], framename)
@@ -177,7 +176,7 @@ function load_db!(db::DeeBee)
     for usere in 1:length(usernames)
         pwd_key = split(wds[usere], "DIV")
         push!(db.cursors, DBUser(usernames[usere], 
-            string(pwd_key[1]), 
+            base64decode(pwd_key[1]), 
             string(replace(pwd_key[2], "\n" => "", "!EOF" => "")), "", ""))
     end
     db.enc = Encryptor("AES256", hmac)
@@ -236,16 +235,16 @@ verify = handler() do c::Toolips.SocketConnection
         cursors = c[:DB].cursors
         usere = findfirst(u -> u.username == user, cursors)
         if isnothing(usere)
-            @warn "invalid user"
+            @warn "invalid username"
             header = "1100" * make_transaction_id()
             write!(c, "$(Char(parse(UInt8, header, base = 2)))\n")
             return
         end
         try
         selected_user = cursors[usere]
-        user_pwd = decrypt(c[:DB].dec, base64decode(selected_user.pwd))
-        incoming_pwd = sha256(pwd)
-        if ~(user_pwd == incoming_pwd)
+        user_pwd = decrypt(c[:DB].dec, selected_user.pwd)
+        incoming_pwd = sha256(pwd[1:end - 1])
+        if ~(string(user_pwd) == string(incoming_pwd))
             @warn "password denied"
             header = "1100" * make_transaction_id()
             write!(c, "$(Char(parse(UInt8, header, base = 2)))\n")
@@ -261,18 +260,14 @@ verify = handler() do c::Toolips.SocketConnection
 		        @warn "$i: $frame"
 	        end
     end
-        @warn "finished pwd check"
         if db_key != selected_user.key
-            @warn "invalid dbkey return"
-            @warn db_key
-            @warn selected_user.key
+            @warn "invalid dbkey provided"
             header = "1001" * make_transaction_id()
             write!(c, "$(Char(parse(UInt8, header, base = 2)))\n")
             return
         end
         trans_id = make_transaction_id()
         selected_user.transaction_id = trans_id
-        @warn "set trans id: $trans_id"
         push!(c[:DB].transactions, Transaction(trans_id, 'S', [db_key, user], 
         selected_user.username))
         header_b = Char(parse(UInt8, "0001" * trans_id, base = 2))
@@ -349,7 +344,7 @@ verify = handler() do c::Toolips.SocketConnection
 	        for (i, frame) in enumerate(stacktrace(catch_backtrace()))
 		        @warn "$i: $frame"
 	        end
-            @sync throw(e)
+            query = ""
             yield()
             continue
         end
