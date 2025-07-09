@@ -5,10 +5,15 @@ version = "0.1.0"
 
 [deps]
 AlgebraFrames = "91245b94-7320-4a9d-ac3a-8d3b3e6674af"
+AlgebraStreamFrames = "d4c27f99-a9f1-4f28-820c-c3ebc43fb045"
+Base64 = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
 Nettle = "49dea1ee-f6fa-5aa6-9a11-8816cee7d4b9"
+SHA = "ea8e919c-243c-51af-8825-aaa63cd721ce"
 Toolips = "a47e2ad8-fcf7-417c-9746-32b9bdf220bd"
 
 [compat]
 AlgebraFrames = "0.1.0"
+Base64 = "1.11.0"
 Nettle = "1.0.0"
+SHA = "0.7.0"
 Toolips = "0.3.10"
