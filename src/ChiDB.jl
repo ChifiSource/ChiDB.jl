@@ -214,7 +214,8 @@ verify = handler() do c::Toolips.SocketConnection
     selected_user = nothing
     while true
         query::String = query * String(readavailable(c))
-        if ~(query[end] == '\n')
+
+        if ~(length(query) > 1 && query[end] == '\n')
             yield()
             continue
         end
@@ -286,10 +287,6 @@ verify = handler() do c::Toolips.SocketConnection
             break
         end
         current_quer = String(readavailable(c))
-        if current_quer == "\n"
-            yield()
-            continue
-        end
         query = query * current_quer
         if ~(length(query) > 0 && query[end] == '\n')
             yield()
