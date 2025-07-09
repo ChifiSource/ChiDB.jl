@@ -1,13 +1,13 @@
 module ChiDB
 using Toolips
 import Toolips: on_start, MultiHandler, route!, set_handler!, get_ip4, string
-import Base: parse
+import Base: parse, close, string
 using AlgebraStreamFrames
 import AlgebraStreamFrames: get_datatype, StreamDataType
+import AlgebraStreamFrames.AlgebraFrames: algebra_initializer
 using Nettle
 using SHA
 using Base64
-import Base: close
 
 #=== header
 #==

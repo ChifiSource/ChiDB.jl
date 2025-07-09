@@ -225,13 +225,17 @@ end
 
 function store_into!(tblname::AbstractString, selected_table::AlgebraStreamFrames.AlgebraFrames.AbstractAlgebraFrame, writevals::Any ...)
     table_paths = keys(selected_table.paths)
-    refwrites = Dict()
+    refwrites = Dict{String, SubString}()
     for cole in 1:length(selected_table.names)
         colname = selected_table.names[cole]
         if ~(colname in table_paths)
             # reftables
             push!(refwrites, colname => writevals[cole])
             continue
+        end
+        T = selected_table.T[cole]
+        if T == CryptString
+            writevals[cole] = base64encode(encrypt(DB_EXTENSION.enc, sha256(writevals[cole])))
         end
         lastval = read(selected_table.paths[colname], String)[end]
         open(selected_table.paths[colname], "a") do o::IOStream
@@ -578,7 +582,13 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:p}}, args::Abstract
     end
     index = parse(Int64, args[2])
     sel_value = DB_EXTENSION.tables[table][col][index]
-    if string(sel_value) == args[3]
+    compare_val = args[3]
+    if typeof(sel_value) == CryptString
+        compare_val = sha256(compare_val)
+    else
+        compare_val = Vector{UInt8}(compare_val)
+    end
+    if Vector{UInt8}(string(sel_value)) == compare_val
         return(0, "1")
     else
         return(0, "0")
