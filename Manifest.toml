@@ -2,11 +2,17 @@
 
 julia_version = "1.11.5"
 manifest_format = "2.0"
-project_hash = "96eac65fa0f4127301433ac2e8f36c014cea6dcd"
+project_hash = "a69a3938a418f1f6ef08f3c39c9062c97e5ecb05"
 
 [[deps.AlgebraFrames]]
-git-tree-sha1 = "9ee46db4ceccc1d6cb501ee3766a901f242319ef"
+path = "../../algebraframes/AlgebraFrames.jl"
 uuid = "91245b94-7320-4a9d-ac3a-8d3b3e6674af"
+version = "0.1.0"
+
+[[deps.AlgebraStreamFrames]]
+deps = ["AlgebraFrames"]
+path = "../../algebraframes/AlgebraStreamFrames"
+uuid = "d4c27f99-a9f1-4f28-820c-c3ebc43fb045"
 version = "0.1.0"
 
 [[deps.ArgTools]]
@@ -75,9 +81,9 @@ version = "6.3.0+0"
 
 [[deps.HTTP]]
 deps = ["Base64", "CodecZlib", "ConcurrentUtilities", "Dates", "ExceptionUnwrapping", "Logging", "LoggingExtras", "MbedTLS", "NetworkOptions", "OpenSSL", "PrecompileTools", "Random", "SimpleBufferStream", "Sockets", "URIs", "UUIDs"]
-git-tree-sha1 = "f93655dc73d7a0b4a368e3c0bce296ae035ad76e"
+git-tree-sha1 = "ed5e9c58612c4e081aecdb6e1a479e18462e041e"
 uuid = "cd3eb016-35fb-5094-929b-558a96fad6f3"
-version = "1.10.16"
+version = "1.10.17"
 
 [[deps.InteractiveUtils]]
 deps = ["Markdown"]
@@ -173,9 +179,9 @@ version = "1.5.0"
 
 [[deps.OpenSSL_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "9216a80ff3682833ac4b733caa8c00390620ba5d"
+git-tree-sha1 = "87510f7292a2b21aeff97912b0898f9553cc5c2c"
 uuid = "458c3c95-2e84-50aa-8efc-19380b2a3a95"
-version = "3.5.0+0"
+version = "3.5.1+0"
 
 [[deps.ParametricProcesses]]
 deps = ["Distributed"]
@@ -250,17 +256,15 @@ version = "1.11.0"
 
 [[deps.Toolips]]
 deps = ["Crayons", "HTTP", "ParametricProcesses", "Pkg", "Sockets", "ToolipsServables"]
-git-tree-sha1 = "80c0fdff858923bca7dfb32876aa554a7ab7309d"
-repo-rev = "Unstable"
-repo-url = "https://github.com/ChifiSource/Toolips.jl.git"
+path = "../../toolips/Toolips.jl"
 uuid = "a47e2ad8-fcf7-417c-9746-32b9bdf220bd"
-version = "0.3.10"
+version = "0.3.61"
 
 [[deps.ToolipsServables]]
 deps = ["Base64", "Markdown"]
-git-tree-sha1 = "5e769d0c4854b7a87d55cb43ea2df6ed975e028a"
+git-tree-sha1 = "c93d4021c38283a0e8324cc859d7d6f2a1dc9122"
 uuid = "bf3a9e68-ca66-4981-8178-9d71c4f8abaa"
-version = "0.2.3"
+version = "0.2.4"
 
 [[deps.TranscodingStreams]]
 git-tree-sha1 = "0c45878dcfdcfa8480052b6ab162cdd138781742"
@@ -268,9 +272,9 @@ uuid = "3bb67fe8-82b1-5028-8e26-92a6c54297fa"
 version = "0.11.3"
 
 [[deps.URIs]]
-git-tree-sha1 = "24c1c558881564e2217dcf7840a8b2e10caeb0f9"
+git-tree-sha1 = "bef26fb046d031353ef97a82e3fdb6afe7f21b1a"
 uuid = "5c2747f8-b7ea-4ff2-ba2e-563bfd36b1d4"
-version = "1.6.0"
+version = "1.6.1"
 
 [[deps.UUIDs]]
 deps = ["Random", "SHA"]
