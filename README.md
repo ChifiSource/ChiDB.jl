@@ -104,6 +104,12 @@ write!(sock, "$(curr_header)vnewt/name|!|1|!|frank\n")
     <td align="center">creates a new table</td>
     <td>tablename</td>
   </tr>
+      <tr>
+    <td align="center">o</td>
+    <td align="center">columns</td>
+    <td align="center">Lists the columns of a table as an easy-to-parse `ChiDB` Vector.</td>
+    <td>tablename</td>
+  </tr>
     <tr>
       <th>
       <th>
@@ -119,8 +125,8 @@ write!(sock, "$(curr_header)vnewt/name|!|1|!|frank\n")
         <tr>
     <td align="center">r</td>
     <td align="center">getrow</td>
-    <td align="center">Gets a full row of data</td>
-    <td>(table)/column rown</td>
+    <td align="center">Gets a full row of data.</td>
+    <td>(table) rown</td>
   </tr>
           <tr>
     <td align="center">i</td>
