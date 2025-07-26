@@ -12,6 +12,7 @@ D - rmuser
 l - list
 s - select
 t - create
+o - columns
 
 # get-store
 g - get
@@ -58,6 +59,14 @@ function get_selected_col(user::DBUser, arg::AbstractString)
         return(2, "column $col_selected not found in $table_selected")
     end
     return(table_selected, col_selected)
+end
+
+function perform_command!(user::DBUser, cmd::Type{DBCommand{:o}}, args::AbstractString ...)
+    table = args[1]
+    if ~(haskey(DB_EXTENSION.tables, table))
+        return(2, "$table not found in database")
+    end
+    return(0, join(DB_EXTENSION.tables[table].names, "!;"))
 end
 
 function perform_command!(user::DBUser, cmd::Type{DBCommand{:l}}, args::AbstractString ...)
