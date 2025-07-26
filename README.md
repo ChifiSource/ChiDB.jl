@@ -184,8 +184,8 @@ write!(sock, "$(curr_header)vnewt/name|!|1|!|frank\n")
                   <tr>
     <td align="center">z</td>
     <td align="center">delete</td>
-    <td align="center">Deletes a table</td>
-    <td>table</td>
+    <td align="center">Deletes a table or column. Will not delete selected table.</td>
+    <td>table/(column)</td>
   </tr>
                 <tr>
     <th align="center"></th>
