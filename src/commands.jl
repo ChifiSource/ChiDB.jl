@@ -70,7 +70,7 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:l}}, args::Abstract
         colstr = join([begin
             "$(selected_table.names[e]) $(selected_table.T[e])!N"
         end for e in 1:length(selected_table.names)], "\n")
-        return(0, "$name ($(length(selected_table.names)) columns $(length(selected_table)) rows !N" * colstr)
+        return(0, "$name ($(length(selected_table.names)) columns $(length(selected_table)) rows)!N" * colstr)
     end
     list = keys(DB_EXTENSION.tables)
     if length(list) < 1
@@ -226,6 +226,7 @@ end
 function store_into!(tblname::AbstractString, selected_table::AlgebraStreamFrames.AlgebraFrames.AbstractAlgebraFrame, writevals::Any ...)
     table_paths = keys(selected_table.paths)
     refwrites = Dict{String, SubString}()
+    writevals = [writevals ...]
     for cole in 1:length(selected_table.names)
         colname = selected_table.names[cole]
         if ~(colname in table_paths)
@@ -589,6 +590,7 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:p}}, args::Abstract
     compare_val = args[3]
     if typeof(sel_value) == CryptString
         compare_val = sha256(compare_val)
+        sel_value = decrypt(DB_EXTENSION.dec, base64decode(string(sel_value)))
     else
         compare_val = Vector{UInt8}(compare_val)
     end
