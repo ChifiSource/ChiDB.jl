@@ -5,13 +5,14 @@
 ###### a toolips-based data-base server
 `ChiDB` is a unique data-base server designed around the `AlgebraFrames` concept and the `.ff` file format. Schema is laid using directories and filenames and data is live-read into memory. This is currently in a state of relative infancy, but is primarily being developed for my own use cases and to demonstrate the various server-building capabilities of `Toolips`.
 - [get started](#get-started)
+
+- [chidb setup](#setup)
   - [adding chidb](#adding)
   - [documentation](#documentation)
-- [chidb setup](#setup)
-  - [schema](#schema)
-    - [feature files](#feature-files)
-    - [readable data-types](#readable-data-types)
-    - [editing schema](#editing-schema)
+- [schema](#schema)
+  - [feature files](#feature-files)
+  - [readable data-types](#readable-data-types)
+  - [editing schema](#editing-schema)
 - [querying](#querying)
   - [clients](#clients)
   - [command list](#commands)
@@ -21,21 +22,19 @@
   - [chidb headers](#headers)
     - [header RFC](#opcodes)
 
-  
- 
-## get started
-
-#### adding
-
-#### documentation
-
 ## setup
 In order to use `ChiDB`, we first need [julia](https://julialang.org). With Julia installed, the package may be added with `Pkg`:
+#### adding
 ```julia
 using Pkg; Pkg.add(url = "https://github.com/ChifiSource/ChiDB.jl")
 using ChiDB
 ```
-To setup a `ChiDB` server directory, run `ChiDB.start` and provide an **empty** directory as `path`. This will create a new folder called `db`, which will contain the data-bases core information.
+#### documentation
+- Here is [a link to our **pre-release** documentatipn](https://chifidocs.com/chifi/ChiDB) for this project.
+- Keep in mind, `ChiDB` is currently pre-release software (on top of pre-release software, [AlgebraStreamFrames](https://github.com/ChifiSource/AlgebraStreamFrames.jl)( -- documentation here (this README) or there (chifidocs) may be partial or incomplete.
+- The server is mostly functional, but commands are being tested thoroughly, despite the relatively thorough automated tests in `/test`.
+
+To setup a `ChiDB` server directory, run `ChiDB.start` and provide an **empty** directory as `path`. This will create a new folder called `db`, which will contain the data-bases core information. It is important the directory is empty, as even empty directories will be read as columns containing rows.
 ```julia
 start(path::String, ip::IP4 = "127.0.0.1":8005)
 ```
@@ -56,10 +55,15 @@ Our `admin` login will also be printed here; by querying with this new `admin` l
     - /col1.ff
 
 ##### feature files
-Each `.ff` file's first line will be a readable data-type. For example, `col1.ff` from above could be
+Each `.ff` file's first line will be a readable data-type. This is followed by a new line for each value; a very simple file format that represents a single **typed** column, or feature, of data. For example, `col1.ff` from above could look like this:
 ```ff
 Integer
+5
+3
+5
+78
 ```
+This simple file format is implemented directly into [AlgebraStreamFrames](https://github.com/ChifiSource/AlgebraStreamFrames.jl), which provides an easy-to-use `StreamFrame` object *with* live-indexing. This is then used by `ChiDB` to easily read and write information to these files.
 ###### readable data-types
 
 ### querying
