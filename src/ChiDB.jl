@@ -370,7 +370,7 @@ verify = handler() do c::Toolips.SocketConnection
         end
         write!(c, "$(Char(parse(UInt8, header, base = 2)))%" * output * "\n")
         if length(c[:DB].transactions) > 50
-            dump_transactions!(db::DeeBee)
+            dump_transactions!(c[:DB])
         end
         query = ""
         yield()
