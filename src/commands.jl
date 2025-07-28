@@ -384,18 +384,6 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:j}}, args::Abstract
     if n < 2
         return(2, "invalid arguments (join requires at least 2 arguments)")
     elseif n == 2
-        if contains(args[1], "/")
-            splts = split(args[1], "/")
-            colname = string(splts[2])
-            table = string(splts[1])
-        else
-            if user.table == ""
-                return(2, "no table provided to join to")
-            end
-            colname = string(args[1])
-            table = user.table
-        end
-        T = args[2]
         # reference join?
         if contains(args[2], "/")
             newn = replace(args[2], "/" => "_")
@@ -416,6 +404,19 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:j}}, args::Abstract
             end
             return(0, "")
         end
+        if contains(args[1], "/")
+            splts = split(args[1], "/")
+            colname = string(splts[2])
+            table = string(splts[1])
+        else
+            if user.table == ""
+                return(2, "no table provided to join to")
+            end
+            colname = string(args[1])
+            table = user.table
+        end
+        T = args[2]
+
     else
         T = args[3]
         colname = args[2]
