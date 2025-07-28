@@ -121,6 +121,7 @@ load_schema!(db::DeeBee) = begin
             join!(this_frame, string(colname) => T) do e
                 db.tables[framename][colname][e]
             end
+            this_frame.length = db.tables[framename].length
             push!(db.refinfo[path], framename)
         end
         push!(db.tables, path => this_frame)
