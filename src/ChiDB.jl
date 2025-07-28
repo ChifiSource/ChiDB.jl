@@ -104,7 +104,11 @@ load_schema!(db::DeeBee) = begin
                 push!(references, replace(file, ".ref" => ""))
             end
         end
-        this_frame = StreamFrame(features ...)
+        this_frame = if length(features) == 0
+            StreamFrame{:ff}()
+        else
+            StreamFrame(features ...)
+        end
         if length(references) > 0
             push!(db.refinfo, path => Vector{String}())
         end
