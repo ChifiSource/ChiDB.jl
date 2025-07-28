@@ -113,7 +113,8 @@ load_schema!(db::DeeBee) = begin
             push!(db.refinfo, path => Vector{String}())
         end
         for ref in references
-            T = AlgebraStreamFrames.infer_type(readlines(db.dir * "/" * replace(ref, "_" => "/"))[1])
+            DT = readlines(db.dir * "/" * replace(ref, "_" => "/") * ".ff")[1]
+            T = AlgebraStreamFrames.get_datatype(StreamDataType{Symbol(DT)})
             namesplits = split(ref, "_")
             colname = namesplits[2]
             framename = namesplits[1]
