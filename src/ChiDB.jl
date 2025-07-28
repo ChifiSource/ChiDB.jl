@@ -121,7 +121,7 @@ load_schema!(db::DeeBee) = begin
             join!(this_frame, string(colname) => T) do e
                 db.tables[framename][colname][e]
             end
-            this_frame.length = db.tables[framename].length
+            this_frame.length = countlines(DB_EXTENSION.dir * "/$framename/$colname.ff") - 1
             push!(db.refinfo[path], framename)
         end
         push!(db.tables, path => this_frame)
