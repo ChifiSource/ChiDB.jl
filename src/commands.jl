@@ -164,7 +164,7 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:g}}, args::Abstract
         return(0, string(generated[selected_ind]))
     else
         return(0, join((string(gen) for gen in generated[selected_ind]), "!;"))
-    else
+    end
 end
 # get row
 function perform_command!(user::DBUser, cmd::Type{DBCommand{:r}}, args::AbstractString ...)
