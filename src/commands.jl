@@ -126,6 +126,7 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:g}}, args::Abstract
         return(2, "get column requires a column directory")
     end
     table_selected, col_selected = get_selected_col(user, args[1])
+    selected_ind = nothing
     if typeof(table_selected) == Int64
         return(table_selected, col)
     end
