@@ -158,11 +158,13 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:g}}, args::Abstract
                 return(2, "could not parse index")
             end
         end
-        generated = DB_EXTENSION.tables[string(table_selected)][string(col_selected)]
-        return(0, join((string(gen) for gen in generated[selected_ind]), "!;"))
     end
     generated = DB_EXTENSION.tables[string(table_selected)][string(col_selected)]
-    return(0, join((string(gen) for gen in generated), "!;"))
+    if typeof(selected_ind) <: Integer
+        return(0, string(generated[selected_ind]))
+    else
+        return(0, join((string(gen) for gen in generated[selected_ind]), "!;"))
+    else
 end
 # get row
 function perform_command!(user::DBUser, cmd::Type{DBCommand{:r}}, args::AbstractString ...)
