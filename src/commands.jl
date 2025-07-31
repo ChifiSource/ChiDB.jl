@@ -126,38 +126,37 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:g}}, args::Abstract
         return(2, "get column requires a column directory")
     end
     table_selected, col_selected = get_selected_col(user, args[1])
-    selected_ind = nothing
     if typeof(table_selected) == Int64
         return(table_selected, col)
     end
-    if n > 1
-        range_sel = args[2]
-        selected_ind = 1
-        if range_sel == "where"
-            wherelookup = Dict("==" => ==, "<" => <, "<=" => <=, 
-                ">=" => >=, ">" => >)
-            if n < 5
-                if ~(args[4] in keys(wherelookup))
-                    return(2, "unrecognized operator: $(args[4])")
-                end
-                generated = generate(DB_EXTENSION.tables[string(table_selected)])
-                filter!(row -> wherelookup[args[4]](string(row[args[3]]), row[args[5]]), generated)
-                return(0, "future tablestring")
+    if n == 1
+        return(0, join((string(gen) for gen in DB_EXTENSION.tables[table_selected][col_selected]), "!;"))
+    end
+    range_sel = args[2]
+    selected_ind = 1
+    if range_sel == "where"
+        wherelookup = Dict("==" => ==, "<" => <, "<=" => <=, 
+            ">=" => >=, ">" => >)
+        if n < 5
+            if ~(args[4] in keys(wherelookup))
+                return(2, "unrecognized operator: $(args[4])")
             end
+            generated = generate(DB_EXTENSION.tables[string(table_selected)])
+            filter!(row -> wherelookup[args[4]](string(row[args[3]]), row[args[5]]), generated)
+            return(0, "future tablestring")
         end
-        if contains(range_sel, ":")
-            vals = split(range_sel, ":")
-            selected_ind = try
-                parse(Int64, vals[1]):parse(Int64, vals[2])
-            catch
-                return(2, "could not parse range")
-            end
-        else
-            selected_ind = try
-                parse(Int64, range_sel)
-            catch
-                return(2, "could not parse index")
-            end
+    elseif contains(range_sel, ":")
+        vals = split(range_sel, ":")
+        selected_ind = try
+            parse(Int64, vals[1]):parse(Int64, vals[2])
+        catch
+            return(2, "could not parse range")
+        end
+    else
+        selected_ind = try
+            parse(Int64, range_sel)
+        catch
+            return(2, "could not parse index")
         end
     end
     generated = DB_EXTENSION.tables[string(table_selected)][string(col_selected)]
@@ -670,7 +669,7 @@ function perform_command!(user::DBUser, cmd::Type{DBCommand{:C}}, args::Abstract
     open(secretd, "a") do o::IOStream
         write(o, base64encode(crypt_pwd) * "DIV" * new_dbkey * "!EOF")
     end
-    new_curs = DBUser(newname, String(newpd), new_dbkey, "", "")
+    new_curs = DBUser(newname, newpd, new_dbkey, "", "")
     push!(DB_EXTENSION.cursors, new_curs)
     return(0, "$(newname)!;$(newpd)!;$(new_dbkey)")
 end
